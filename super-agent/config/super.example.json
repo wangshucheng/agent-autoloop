@@ -216,7 +216,8 @@
         "tripped"
       ],
       "collapsed_lanes": ["done"]
-    }
+    },
+    "health_components": ["super-api", "watchdog", "assessor", "worker", "channel", "source:github", "delivery"]
   },
   "bindings": {
     "sources": {

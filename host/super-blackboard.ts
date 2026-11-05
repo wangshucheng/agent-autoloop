@@ -40,7 +40,12 @@ export interface BoardLane {
 
 export interface Overview {
   needs_person: { count: number; items: BoardItem[] };
-  health: { status: "ok" | "degraded" | "failing"; problems: Array<Record<string, unknown>>; suppressed: number };
+  health: {
+    status: "ok" | "degraded" | "failing";
+    problems: Array<Record<string, unknown>>;
+    suppressed: number;
+    cards?: Array<{ key: string; title: string; text: string; options: string[] }>;
+  };
   activity_24h: {
     triggers: number;
     evals: number;
@@ -63,6 +68,7 @@ export interface OverviewOptions {
   worker_capacity?: number;
   health_problems?: Array<Record<string, unknown>>;
   suppressed?: number;
+  health_cards?: Array<{ key: string; title: string; text: string; options: string[] }>;
   activity?: Partial<Overview["activity_24h"]>;
 }
 
@@ -193,6 +199,7 @@ export function overviewOf(lanes: BoardLane[], options: OverviewOptions = {}): O
       status: problems.length ? "degraded" : "ok",
       problems,
       suppressed: options.suppressed ?? 0,
+      cards: options.health_cards ?? [],
     },
     activity_24h: activity,
     policy_version: options.policy_version ?? "unversioned",

@@ -32,7 +32,7 @@ python -m http.server 8080
 | 泳道标签 / 泳道折叠 | 按泳道筛选；`done` 默认折叠（历史不占版面） |
 | 搜索 | 按标题 / id / correlation_id / kind / 预览过滤 |
 | 事实流开关 | 演示模式每 6 秒注入一条新事实；真实模式来自 SSE；可暂停 |
-| 系统健康区块 | 默认折叠，只给「几个问题 + 已抑制的瞬时错误数」；连续 3 次才升级 |
+| 系统健康区块 | 默认折叠，只给「几个问题 + 已抑制的瞬时错误数」；连续 3 次才升级。L4 人工卡（标 `L4`）在展开后出现，同一根因只发一张 |
 
 ## 接口映射
 
@@ -46,6 +46,7 @@ python -m http.server 8080
 | 策略保存 | `POST /v1/super/policy/save`（带 `baseRevision` + `origin`，CAS） |
 | 暂停处理 | `POST /v1/super/processing/pause` |
 | 重放 / 分支 / 断点 | `POST /v1/super/replay` · `/fork` · `/breakpoints`，以及 `GET /v1/super/debug/stream` |
+| 组件健康上报 / 自愈 | `POST /v1/super/health/report` · `/health/check`（需 owner key），`GET /v1/super/health` · `/health/actions`。见 `docs/M4_HEALTH_CLOSED_LOOP.md` |
 
 ## 设计约束
 

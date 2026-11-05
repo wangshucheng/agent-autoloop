@@ -231,17 +231,24 @@
   function renderHealth() {
     var o = currentOverview();
     var probs = (o.health && o.health.problems) || [];
-    $("health-status").className = "dot" + (probs.length ? " degraded" : "");
-    $("health-summary").textContent = probs.length
-      ? probs.length + " 个问题 · " + (o.health.suppressed || 0) + " 次瞬时错误已抑制"
-      : "正常 · " + (o.health.suppressed || 0) + " 次瞬时错误已抑制";
+    var cards = (o.health && o.health.cards) || [];
+    $("health-status").className = "dot" + (probs.length || cards.length ? " degraded" : "");
+    var parts = [];
+    if (cards.length) parts.push(cards.length + " 张待处理卡");
+    if (probs.length) parts.push(probs.length + " 个问题");
+    parts.push((o.health.suppressed || 0) + " 次瞬时错误已抑制");
+    $("health-summary").textContent = parts.join(" · ");
     $("health-toggle").setAttribute("aria-expanded", state.healthOpen ? "true" : "false");
     $("health-body").hidden = !state.healthOpen;
-    $("health-body").innerHTML = probs.length
-      ? probs.map(function (p) {
-          return '<div class="health-row"><span>' + esc(p.entry) + " · " + esc(p.since) +
-            '</span><span class="code">' + esc(p.code) + "</span></div>";
-        }).join("") + '<p class="empty">一次性网络错误不升级；连续 3 次才进这里。</p>'
+    var rows = cards.map(function (c) {
+      return '<div class="health-row"><span>' + esc(c.title) +
+        '</span><span class="code">L4 · ' + esc(c.key.slice(0, 12)) + "</span></div>";
+    }).concat(probs.map(function (p) {
+      return '<div class="health-row"><span>' + esc(p.entry) + " · " + esc(p.since) +
+        '</span><span class="code">' + esc(p.code) + "</span></div>";
+    }));
+    $("health-body").innerHTML = rows.length
+      ? rows.join("") + '<p class="empty">一次性网络错误不升级；连续 3 次才进这里。</p>'
       : '<p class="empty">健康状态不占版面：没有问题需要你处理。</p>';
   }
 

@@ -2,7 +2,7 @@
 // Every upstream /v1 path, field and auth rule is untouched: this handler answers only its own
 // prefix and returns undefined for everything else. M3 adds explicit commands, each producing
 // exactly ONE fact through kernel/store.commit(); the runtime never writes on its own initiative.
-import type { FactV2 } from "../kernel/fact.ts";
+import { INSTRUCTION_FIELDS, type FactV2 } from "../kernel/fact.ts";
 import type { Fact, Row } from "../kernel/evolve.ts";
 import { commit } from "../kernel/store.ts";
 import {
@@ -13,7 +13,7 @@ import {
   traceFromFacts,
 } from "./super-blackboard.ts";
 import type { HealthEntry } from "./super-watchdog.ts";
-import { HealthBoard } from "./super-watchdog.ts";
+import { HealthPlane } from "./super-health.ts";
 import { MainSessionAssessor, type AssessmentOutcome } from "./super-assessor.ts";
 import {
   DEFAULT_SUPER_CONFIG,
@@ -71,6 +71,7 @@ export interface SuperDeps {
   assessor: MainSessionAssessor;
   timedOut(): Array<{ eval_id: string; outcome: AssessmentOutcome }>;
   config?: SuperConfig;
+  healthPlane?: HealthPlane;
   debug?: SuperDebugDeps;
 }
 
@@ -210,6 +211,55 @@ async function handleCommand(deps: SuperDeps, request: Request, path: string): P
   return ok(deps, prepared.data, { stream_after: prepared.fact.seq });
 }
 
+const HEALTH_COMMANDS = new Set([`${PREFIX}/health/report`, `${PREFIX}/health/check`]);
+
+/** Component-driven health reports and explicit checks. No facts are written: health is runtime state. */
+async function handleHealthCommand(deps: SuperDeps, request: Request, path: string): Promise<Response> {
+  const plane = deps.healthPlane;
+  if (!plane) return fail(deps, "health_not_wired", "the health plane is not available on this host", 501);
+  let body: Record<string, unknown>;
+  try {
+    body = await readBody(request);
+  } catch (error) {
+    return fail(deps, "invalid_body", error instanceof Error ? error.message : "invalid body", 400);
+  }
+  for (const field of INSTRUCTION_FIELDS) {
+    if (Object.hasOwn(body, field)) {
+      return fail(deps, "instruction_field_rejected", `health report cannot specify ${field}`, 400);
+    }
+  }
+  if (path === `${PREFIX}/health/check`) {
+    const actions = plane.evaluateAll(deps.now());
+    return ok(deps, {
+      actions,
+      entries: plane.entries(),
+      status: plane.status(),
+      suppressed: plane.suppressed(),
+    });
+  }
+  const { component, owner, ok: healthy, code } = body;
+  if (!HealthPlane.validName(component) || !HealthPlane.validName(owner) || typeof healthy !== "boolean") {
+    return fail(deps, "invalid_health_report", "component, owner and a boolean ok are required", 400);
+  }
+  try {
+    const result = plane.report({
+      component,
+      owner,
+      ok: healthy,
+      code: typeof code === "string" ? code.slice(0, 128) : undefined,
+      now: deps.now(),
+    });
+    return ok(deps, {
+      entry: result.entry,
+      actions: result.actions,
+      status: plane.status(),
+      suppressed: plane.suppressed(),
+    });
+  } catch (error) {
+    return fail(deps, "health_owner_mismatch", error instanceof Error ? error.message : "report refused", 409);
+  }
+}
+
 const DEBUG_COMMANDS = new Set([`${PREFIX}/fork`, `${PREFIX}/replay`, `${PREFIX}/breakpoints`]);
 const BRANCH_FACTS = /^\/v1\/super\/branches\/([A-Za-z0-9_:.-]{1,128})\/facts$/;
 
@@ -227,7 +277,7 @@ async function handleDebug(deps: SuperDeps, request: Request, path: string): Pro
     return fail(deps, "invalid_body", error instanceof Error ? error.message : "invalid body", 400);
   }
   // Debug bodies are data too: they may not name a cwd, an agent or an access level.
-  for (const field of ["to", "cwd", "skill", "access", "emits", "agent", "answerers"]) {
+  for (const field of INSTRUCTION_FIELDS) {
     if (Object.hasOwn(body, field)) {
       return fail(deps, "instruction_field_rejected", `command body cannot specify ${field}`, 400);
     }
@@ -301,6 +351,7 @@ async function route(deps: SuperDeps, request: Request, url: URL): Promise<Respo
 
   if (!isRead) {
     if (isCommandPath(path)) return handleCommand(deps, request, path);
+    if (HEALTH_COMMANDS.has(path)) return handleHealthCommand(deps, request, path);
     if (isDebugCommandPath(path)) return handleDebug(deps, request, path);
     return fail(deps, "writes_require_explicit_command", "only the declared command paths are writable", 405);
   }
@@ -321,7 +372,14 @@ async function route(deps: SuperDeps, request: Request, url: URL): Promise<Respo
         policy_version: deps.policyVersion(),
         now,
         health_problems: problems,
-        suppressed: deps.suppressed(),
+        suppressed: deps.suppressed() + (deps.healthPlane?.suppressed() ?? 0),
+        health_cards:
+          deps.healthPlane?.cards().map((card) => ({
+            key: card.key,
+            title: card.title,
+            text: card.text,
+            options: card.options,
+          })) ?? [],
         worker_capacity: capacityFor(cfg, project),
       }),
     );
@@ -335,11 +393,27 @@ async function route(deps: SuperDeps, request: Request, url: URL): Promise<Respo
 
   if (path === `${PREFIX}/health`) {
     const entries = deps.health();
-    const failing = entries.filter((entry) => entry.state === "failing").length;
+    const plane = deps.healthPlane;
+    const fallback = entries.some((entry) => entry.state === "failing")
+      ? "failing"
+      : entries.some((entry) => entry.state !== "ok")
+        ? "degraded"
+        : "ok";
     return ok(deps, {
-      status: failing ? "failing" : entries.some((entry) => entry.state !== "ok") ? "degraded" : "ok",
+      status: plane ? plane.status() : fallback,
       entries,
       suppressed: deps.suppressed(),
+      transient_absorbed: plane?.suppressed() ?? 0,
+      actions: plane?.actions() ?? [],
+      cards: plane?.cards() ?? [],
+    });
+  }
+
+  if (path === `${PREFIX}/health/actions`) {
+    return ok(deps, {
+      actions: deps.healthPlane?.actions() ?? [],
+      cards: deps.healthPlane?.cards() ?? [],
+      suppressed: deps.healthPlane?.suppressed() ?? 0,
     });
   }
 
@@ -432,10 +506,15 @@ async function liveDeps(): Promise<SuperDeps> {
   const config = loadSuperConfig(superConfigPath(HOME));
   const maxFacts = Number(process.env.AGENT_AUTOLOOP_SUPER_MAX_FACTS ?? config.max_facts);
 
-  const board = new HealthBoard(config.watchdog.transient_failure_threshold);
-  for (const name of config.health_components) board.claim(name, name, Date.now());
+  const healthPlane = new HealthPlane({
+    components: config.health_components,
+    policy: config.watchdog,
+    now: Date.now,
+  });
   const report = (name: string, healthy: boolean, code?: string) => {
-    if (config.health_components.includes(name)) board.report(name, name, healthy, code, Date.now());
+    if (config.health_components.includes(name)) {
+      healthPlane.report({ component: name, owner: name, ok: healthy, code, now: Date.now() });
+    }
   };
 
   const timedOut: Array<{ eval_id: string; outcome: AssessmentOutcome }> = [];
@@ -454,12 +533,13 @@ async function liveDeps(): Promise<SuperDeps> {
   return {
     now: Date.now,
     config,
+    healthPlane,
     policyVersion: () => String(hub.getView().get("config", "rules")?.version ?? "unversioned"),
     seq: () => hub.getView().seq,
     facts: recent,
     factsAfter: (after) => hub.logAfter(after, -1) as unknown as FactV2[],
     rows: (table, match) => hub.getView().select(table, match ?? {}),
-    health: () => board.all(),
+    health: () => healthPlane.entries(),
     suppressed: () => recent().filter((fact) => fact.type === "attention.suppressed").length,
     isOwner: (token) => Boolean(whose(hub.getView(), "owner", token)),
     onChange: (listener) => hub.onChange(() => listener()),

@@ -76,13 +76,13 @@ M3 留下一个用户可感知的缺口：所有写命令要 owner key，但前�
 | `npm run test:sim` 20000 步 | ✅ 30.3s / 1644 completed |
 | `host/http.ts` 行数 | 41 ≤ 50（架构断言） |
 | `node --check` 前端 app.js / mock.js | ✅ |
-| CI 双矩阵 | 推送后触发，结果回填 |
+| CI 双矩阵 | ✅ run `42041668335`：`ubuntu-latest` + `macos-latest` **全部 success** |
 
-## 6. 仍未完成（M4 第二批，需要真实运行环境）
+## 6. M4 第二批进度
 
-以下不是代码占位，而是**必须依赖外部系统或目标平台**才能验证的工作，本轮不做伪实现：
+1. ✅ **组件主动上报 + 自愈动作接口**：已做成**不依赖外部系统**的可测闭环（14 项单测，合并回归 159/159），见 `M4_HEALTH_CLOSED_LOOP.md`。生产落地只剩注入一个真实 `HealingActor` 实现，`HealthPlane` 与 API 无需改动。
 
-1. **真实组件接 HealthBoard 与 Watchdog 自愈动作**：worker / channel / source / delivery 的上报与 `restart` / `rebuild_projection` / `disable_component` 落地。当前 HealthBoard 只接了 super 平面自己的三个组件。
+以下仍是**必须依赖外部系统或目标平台**才能验证的工作，不做伪实现：
 2. **物化投影**：`/v1/super/*` 目前仍读最近 N 条事实再投影。要换成投影表，需要为看板项新增投影表并让命令事实携带对应 `changes`，属于 M5 规模的模型改动。
 3. **Webhook / 飞书卡片 / 定时 / 多项目生产接线**：需要真实凭据、回调地址与飞书应用配置。
 4. **WSL → macOS 迁移压测**：本机 `wsl.exe` 被安全策略禁止，需要用户在安全中心解禁或在 macOS 上执行 `deploy/com.superagent.runtime.plist`。

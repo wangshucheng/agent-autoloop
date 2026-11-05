@@ -30,7 +30,8 @@ M0/M1 阶段为了不覆盖上游 `agent-autoloop` 的任何原有文件，交�
 - **M2 只读控制平面已接线**：`approvals` / `grants` 投影、`host/super-{blackboard,eventstore,watchdog,api}.ts`、`/v1/super/*` 只读端点与 SSE、`tests/super-agent-host.test.ts`（16 项）。CI run `42032246684` 双矩阵 success。见 `docs/M2_READONLY_PLANE.md`。
 - **M3 显式写命令与评估旁路已接线**：`host/super-commands.ts`（五类命令 → 一条事实）、`host/super-assessor.ts`（候选卡 → `eval.decided` 回写）、鉴权前置、分支调试、HealthBoard 实时、`tests/super-agent-m3.test.ts`（20 项）。合并绿色回归 135/135。见 `docs/M3_COMMANDS_AND_ASSESSMENT.md`。
 - **M4 第一批已完成**：修掉「示例配置会让中台无法启动」的缺陷，拆出 `super.json`，`host/super-config.ts` 与 `liveDeps()` 接真实配置，前端补 owner key 输入并改用 super SSE；10 项单测（含 `node:vm` 前端冒烟）。见 `docs/M4_CONFIG_AND_FRONTEND.md`。
-- **schema 层与 `src/domain/ports.ts`、`src/web/api.ts` 仍是契约文件**；M4 第二批（真实组件自愈 / 物化投影 / Webhook 飞书 / WSL→macOS 压测）需要真实运行环境，本环境无法验证。
+- **M4 第二批第 1 项已完成**：`host/super-health.ts` 的 `HealthPlane` + `HealingActor` 接口把「组件上报 → Watchdog 阶梯 → 动作执行 → 恢复」做成零外部依赖的可测闭环；`/v1/super/health/report` · `/check` · `/actions` 端点、14 项单测、前端 L4 卡。见 `docs/M4_HEALTH_CLOSED_LOOP.md`。
+- **schema 层与 `src/domain/ports.ts`、`src/web/api.ts` 仍是契约文件**；M4 第二批余下 3 项（物化投影 / Webhook 飞书 / WSL→macOS 压测）需要真实运行环境，本环境无法验证。
 
 ## 落地时必须留意的三条底座约束
 
