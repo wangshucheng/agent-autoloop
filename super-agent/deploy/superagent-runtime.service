@@ -1,0 +1,14 @@
+[Unit]
+Description=super-agent-auto-loop-runtime (WSL dev)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/super-agent-auto-loop-runtime
+Environment=AGENT_AUTOLOOP_HOME=%h/.agent-autoloop
+ExecStart=%h/.nvm/versions/node/v24/bin/node --disable-warning=ExperimentalWarning bin/agent-autoloop.ts up
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target

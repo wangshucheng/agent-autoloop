@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Super-agent 后台 · 仪表盘与 Blackboard</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="shell">
+
+  <header class="topbar">
+    <div class="brand">
+      <h1>Super-agent 后台</h1>
+      <p>仪表盘 · Blackboard 看板 · 事实流读模型</p>
+    </div>
+    <div class="topbar-controls">
+      <label class="field">
+        <span>项目</span>
+        <select id="project-select"></select>
+      </label>
+      <label class="field">
+        <span>审批模式</span>
+        <select id="approval-select">
+          <option value="off">off · 直接放行</option>
+          <option value="notify">notify · 灰卡留痕</option>
+          <option value="gate" selected>gate · 阻断并挂起</option>
+          <option value="escalate">escalate · 条件升级</option>
+        </select>
+      </label>
+      <button id="btn-connect" class="btn">连接后端</button>
+      <span id="mode-badge" class="badge">演示数据</span>
+    </div>
+  </header>
+
+  <div id="mode-banner" class="banner">
+    <span>当前为<b>演示数据</b>：所有交互都在本地生效，不会写入真实系统。</span>
+    <span class="banner-inline">
+      API 地址 <input id="api-base" type="text" value="http://127.0.0.1:8787" spellcheck="false">
+      <button id="btn-connect-inline" class="btn btn-small">重试连接</button>
+    </span>
+  </div>
+
+  <main>
+    <section class="panel" id="panel-needs">
+      <div class="panel-head">
+        <h2>① 要我做什么 <span id="needs-count" class="count">0</span></h2>
+        <span class="hint">唯一默认展开的区块</span>
+      </div>
+      <div id="needs-list" class="needs-list"></div>
+      <p id="approval-hint" class="policy-hint"></p>
+    </section>
+
+    <section class="panel compact" id="panel-health">
+      <button class="panel-toggle" id="health-toggle" aria-expanded="false">
+        <span>② 系统健康 <span id="health-status" class="dot"></span></span>
+        <span id="health-summary" class="hint"></span>
+        <span class="chev">展开</span>
+      </button>
+      <div id="health-body" class="collapsible" hidden></div>
+    </section>
+
+    <section class="panel" id="panel-activity">
+      <div class="panel-head">
+        <h2>③ 最近 24 小时</h2>
+        <span class="hint">健康状态不占版面，指标只给会改变你动作的数字</span>
+      </div>
+      <div id="metrics" class="metrics"></div>
+      <div id="attention" class="attention"></div>
+    </section>
+
+    <section class="panel" id="panel-board">
+      <div class="panel-head">
+        <h2>Blackboard · 事实流看板</h2>
+        <div class="board-controls">
+          <input id="search-input" type="search" placeholder="搜索标题 / id / 因果链" spellcheck="false">
+          <button id="btn-clear-filter" class="btn btn-small">清除筛选</button>
+          <button id="btn-toggle-stream" class="btn btn-small">暂停事实流</button>
+        </div>
+      </div>
+      <div id="lane-tabs" class="lane-tabs"></div>
+      <div id="board" class="board"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span id="footer-stats"></span>
+    <span>分支 main · 只读 · 回放/断点只在分支生效</span>
+  </footer>
+</div>
+
+<aside id="drawer" class="drawer" hidden>
+  <div class="drawer-head">
+    <div>
+      <p class="drawer-eyebrow">因果链追踪</p>
+      <h2 id="drawer-title"></h2>
+    </div>
+    <button id="drawer-close" class="btn btn-small">关闭</button>
+  </div>
+  <div class="drawer-tabs">
+    <button class="tab active" data-tab="trace">事件链</button>
+    <button class="tab" data-tab="replay">回放 / 断点</button>
+    <button class="tab" data-tab="policy">策略与授权</button>
+  </div>
+  <div id="drawer-body" class="drawer-body"></div>
+</aside>
+<div id="drawer-mask" class="drawer-mask" hidden></div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="mock.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

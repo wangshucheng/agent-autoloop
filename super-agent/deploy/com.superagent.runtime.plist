@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS production LaunchAgent. Replace /Users/me and the node path before installing.
+  install: cp deploy/com.superagent.runtime.plist ~/Library/LaunchAgents/
+           launchctl load ~/Library/LaunchAgents/com.superagent.runtime.plist
+  The upstream hub exits when its log pipe breaks; KeepAlive is the L1 self-healing base.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.superagent.runtime</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/me/super-agent-auto-loop-runtime/bin/agent-autoloop.ts</string>
+    <string>up</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/me/super-agent-auto-loop-runtime</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>AGENT_AUTOLOOP_HOME</key>
+    <string>/Users/me/.agent-autoloop</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/me/.agent-autoloop/logs/stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/me/.agent-autoloop/logs/stderr.log</string>
+</dict>
+</plist>

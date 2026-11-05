@@ -1,0 +1,252 @@
+{
+  "timezone": "Asia/Shanghai",
+  "askFirst": ["删数据", "停服", "花钱", "对外发消息"],
+  "sources": {
+    "github": { "name": "GitHub", "adapter": "github", "project": "home-deco" },
+    "shop": { "name": "订单系统" },
+    "cron": { "name": "定时" }
+  },
+  "agents": {
+    "codex": {
+      "name": "Codex",
+      "worker": "dev-machine",
+      "use": "codex",
+      "access": "edit"
+    },
+    "reader": {
+      "name": "只读巡检",
+      "worker": "dev-machine",
+      "use": "command",
+      "access": "read",
+      "command": ["codebuddy", "-p", "{prompt}"]
+    },
+    "dsh": {
+      "name": "DeepSeek Harness",
+      "worker": "dev-machine",
+      "use": "dsh",
+      "access": "edit"
+    }
+  },
+  "channels": {
+    "feishu": {
+      "name": "飞书",
+      "use": "feishu",
+      "answerers": ["ou_xxx"],
+      "links": false
+    },
+    "desktop": { "name": "桌面通知", "use": "desktop" }
+  },
+  "rules": [
+    {
+      "name": "每日早报",
+      "when": { "cron": "0 8 * * *" },
+      "to": "reader",
+      "cwd": "~/notes",
+      "skill": "morning-brief",
+      "prompt": "整理昨天的笔记和提交，写今天的早报。",
+      "project": "personal",
+      "tell": "needed",
+      "approval": { "mode": "off" }
+    },
+    {
+      "name": "处理新 Issue",
+      "when": { "source": "github", "types": ["issues.opened"] },
+      "to": "codex",
+      "cwd": "~/code/home-deco",
+      "project": "home-deco",
+      "skill": "handle-issue",
+      "parallel": 3,
+      "tell": "needed",
+      "emits": { "source": "github", "types": ["issue.triaged", "pr.opened"] }
+    },
+    {
+      "name": "线上告警排查",
+      "when": { "source": "shop", "types": ["alert.*"] },
+      "to": "codex",
+      "cwd": "~/code/shop",
+      "project": "shop",
+      "skill": "run-ops",
+      "parallel": 2,
+      "tell": "needed",
+      "approval": { "category": "restart", "mode": "escalate", "after_auto_attempts": 2 }
+    }
+  ],
+  "elsewhere": [
+    { "name": "每周清理", "source": "shop", "to": "codex", "cron": "0 6 * * 0", "where": "调度器的定时任务" }
+  ],
+
+  "super": {
+    "enabled": true,
+    "hub": {
+      "listen": "127.0.0.1",
+      "publicUrl": "https://agent.example.com",
+      "stateDir": "~/.agent-autoloop"
+    },
+    "projects": [
+      {
+        "id": "home-deco",
+        "name": "家装社区 App",
+        "cwd": "~/code/home-deco",
+        "worktree_root": "~/agent-worktrees/home-deco",
+        "answerers": ["ou_xxx"],
+        "worker_capacity": 2,
+        "budgets": { "max_runs_per_hour": 60, "max_cost_usd_per_day": 20 }
+      },
+      {
+        "id": "shop",
+        "name": "订单系统",
+        "cwd": "~/code/shop",
+        "worktree_root": "~/agent-worktrees/shop",
+        "answerers": ["ou_xxx", "ou_yyy"],
+        "worker_capacity": 2,
+        "budgets": { "max_runs_per_hour": 30, "max_cost_usd_per_day": 10 }
+      },
+      {
+        "id": "personal",
+        "name": "个人笔记",
+        "cwd": "~/notes",
+        "worktree_root": "~/agent-worktrees/personal",
+        "answerers": ["ou_xxx"],
+        "worker_capacity": 1,
+        "budgets": { "max_runs_per_hour": 10, "max_cost_usd_per_day": 2 }
+      }
+    ],
+    "policy": {
+      "accept_mode": "observe",
+      "admission": {
+        "github": {
+          "allowed_senders": ["gao", "reviewer-bot"],
+          "bots": ["dependabot[bot]"],
+          "scopes": {
+            "issues.opened": {
+              "listed_unaddressed": "inferred",
+              "unlisted_addressed": "ignore",
+              "unlisted_unaddressed": "ignore"
+            },
+            "issue_comment": {
+              "listed_unaddressed": "inferred",
+              "unlisted_addressed": "explicit",
+              "unlisted_unaddressed": "ignore"
+            }
+          }
+        },
+        "feishu": {
+          "allowed_senders": ["ou_xxx"],
+          "bots": [],
+          "scopes": {
+            "direct": {
+              "listed_unaddressed": "inferred",
+              "unlisted_addressed": "ignore",
+              "unlisted_unaddressed": "ignore"
+            }
+          }
+        }
+      },
+      "rules": [
+        { "id": "issue-triage", "name": "处理新 Issue", "instruction": "只分类与复现，不推送、不合并", "enabled": true },
+        { "id": "ops-alert", "name": "线上告警排查", "instruction": "先读日志定位；重启需审批", "enabled": true }
+      ]
+    },
+    "eval": {
+      "enabled": true,
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "timeout_ms": 120000,
+      "max_retries": 2,
+      "paused_does_not_expire": true,
+      "context_budget": {
+        "trigger_chars": 4000,
+        "near_chars": 1200,
+        "window_chars": 400,
+        "stub_chars": 50,
+        "max_messages": 11,
+        "max_related_tickets": 8
+      },
+      "reassess_on_policy_change": true
+    },
+    "approval": {
+      "enabled": true,
+      "default_mode": "gate",
+      "categories": {
+        "delete": { "mode": "gate" },
+        "restart": { "mode": "gate" },
+        "spend": { "mode": "gate", "threshold_usd": 0 },
+        "external_message": { "mode": "gate" },
+        "merge": { "mode": "escalate", "after_auto_attempts": 2 },
+        "read_only": { "mode": "off" },
+        "routine": { "mode": "notify" }
+      },
+      "overrides": [
+        {
+          "project": "shop",
+          "rule": "线上告警排查",
+          "category": "restart",
+          "mode": "off",
+          "reason": "已由 runbook 固化，且只作用于隔离环境"
+        }
+      ],
+      "channels": ["feishu", "desktop"],
+      "timeout_hours": 24,
+      "on_timeout": "deny",
+      "one_question_at_a_time": true,
+      "revocable": true
+    },
+    "grants": {
+      "revalidate_on_resume": true,
+      "revalidate_on_policy_change": true,
+      "revoke_on_manual_stop": true,
+      "revocation_broadcast": "immediate"
+    },
+    "excitation": {
+      "max_hops": 8,
+      "hop_reset_forbidden": ["card.answered", "timer.due", "run.retry"],
+      "max_events_per_receipt": 5,
+      "max_runs_per_project_per_hour": 60,
+      "max_tokens_per_project_per_day": 500000,
+      "max_cost_usd_per_project_per_day": 20,
+      "dedup_window_minutes": 30,
+      "cooldown_minutes": 15,
+      "on_trip": "record_and_notify",
+      "cycle_detection": true
+    },
+    "attention": {
+      "max_cards_per_owner_per_hour": 4,
+      "max_questions_per_ticket": 2,
+      "max_words_per_card": 100,
+      "digest_after": 3,
+      "quiet_hours": "23:00-08:00",
+      "escalate_only_when_actionable": true,
+      "suppress_transient_errors": 3,
+      "healthy_state_takes_no_space": true
+    },
+    "watchdog": {
+      "restart_budget_per_component_per_hour": 5,
+      "max_auto_escalations_per_hour": 2,
+      "transient_failure_threshold": 3,
+      "escalation_suppression_minutes": 30,
+      "on_budget_exhausted": "disable_component_and_notify_once",
+      "plugin_restart_seconds": 30
+    },
+    "audit": {
+      "model_call_audit": false,
+      "model_generated_summary": false,
+      "branch_gc": {
+        "debug_retention_days": 7,
+        "archive_format": "jsonl",
+        "keep_audit_branches": true
+      }
+    },
+    "web": {
+      "reserved_api_prefix": "/v1/super",
+      "stream": { "sse": true, "max_buffer_facts": 0 },
+      "dashboard": { "default_expanded": "needs_person" },
+      "blackboard": {
+        "lanes": [
+          "intake", "evaluating", "would_accept", "authorized",
+          "working", "waiting_person", "suspended", "done", "tripped"
+        ],
+        "collapsed_lanes": ["done"]
+      }
+    }
+  }
+}
