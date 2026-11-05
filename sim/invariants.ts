@@ -1,16 +1,14 @@
 import assert from "node:assert/strict";
 import { deadlines } from "../kernel/due.ts";
-import { snapshot, type Fact, type View, type Row } from "../kernel/evolve.ts";
+import { snapshot, TABLES, type Fact, type View, type Row } from "../kernel/evolve.ts";
 
 type Snapshot = ReturnType<typeof snapshot>;
 const rows = (view: Snapshot, table: keyof Snapshot["tables"]) => Object.values(view.tables[table]);
 // Independent replay oracle: it checks the indexed projection without using its write or query implementation.
 export function replay(log: Fact[]): Snapshot {
-  const tables = Object.fromEntries(
-    ["events", "runs", "run_events", "cards", "deliveries", "timers", "schedules", "seen", "keys", "config", "due"].map(
-      (t) => [t, {}],
-    ),
-  ) as Snapshot["tables"];
+  // The oracle stays independent of how projections are written or queried, but shares the
+  // table list: a new projection table must not silently make every replay assertion stale.
+  const tables = Object.fromEntries(TABLES.map((t) => [t, {}])) as Snapshot["tables"];
   const next: Record<string, number> = {};
   let seq = 0;
   for (const fact of log) {

@@ -1,12 +1,12 @@
-// L1 host. HealthBoard + L0..L4 self-healing ladder. Skeleton to drop into host/.
-// Ported from dsh src/infra/health.ts (one writer per entry) and upstream kernel/decide.ts sweep().
+// L1 host. HealthBoard + L0..L4 self-healing ladder.
+// One writer per entry: a component may only report the entry it claimed.
 import { digestOf } from "../kernel/fact.ts";
 
 export type HealthState = "ok" | "degraded" | "failing" | "disabled" | "recovering";
 
 export interface HealthEntry {
-  name: string; // runtime | evals | assessment | launch | delivery | relay | notice | reply | worker | source:<id> | watchdog
-  owner: string; // the ONLY component allowed to write it
+  name: string;
+  owner: string;
   state: HealthState;
   consecutive_failures: number;
   last_success_at?: number;
@@ -17,7 +17,7 @@ export interface HealthEntry {
 export interface WatchdogPolicy {
   restart_budget_per_component_per_hour: number;
   max_auto_escalations_per_hour: number;
-  transient_failure_threshold: number; // 3 consecutive failures before it becomes a system problem
+  transient_failure_threshold: number;
   escalation_suppression_minutes: number;
   plugin_restart_seconds: number;
   on_budget_exhausted: "disable_component_and_notify_once";
@@ -33,14 +33,29 @@ export interface HealingAction {
   card?: { key: string; title: string; text: string; options: string[] };
 }
 
-/** HealthBoard: duplicate claims are refused, reports after unregistration are ignored. */
+export const DEFAULT_WATCHDOG_POLICY: WatchdogPolicy = {
+  restart_budget_per_component_per_hour: 3,
+  max_auto_escalations_per_hour: 1,
+  transient_failure_threshold: 3,
+  escalation_suppression_minutes: 60,
+  plugin_restart_seconds: 30,
+  on_budget_exhausted: "disable_component_and_notify_once",
+};
+
+/** Duplicate claims are refused; reports from anyone but the owner are ignored. */
 export class HealthBoard {
   private readonly entries = new Map<string, HealthEntry>();
   private readonly owners = new Map<string, string>();
+  private readonly transientThreshold: number;
+
+  constructor(transientThreshold = 3) {
+    this.transientThreshold = transientThreshold;
+  }
 
   claim(name: string, owner: string, now: number): void {
-    if (this.owners.has(name) && this.owners.get(name) !== owner) {
-      throw new Error(`health entry ${name} already claimed by ${this.owners.get(name)}`);
+    const claimed = this.owners.get(name);
+    if (claimed !== undefined && claimed !== owner) {
+      throw new Error(`health entry ${name} already claimed by ${claimed}`);
     }
     this.owners.set(name, owner);
     this.entries.set(name, {
@@ -64,7 +79,7 @@ export class HealthBoard {
     } else {
       entry.consecutive_failures += 1;
       entry.last_error_code = code;
-      entry.state = entry.consecutive_failures >= 3 ? "failing" : "degraded";
+      entry.state = entry.consecutive_failures >= this.transientThreshold ? "failing" : "degraded";
     }
     return { ...entry };
   }
@@ -73,7 +88,8 @@ export class HealthBoard {
     return [...this.entries.values()].map((e) => ({ ...e }));
   }
   get(name: string): HealthEntry | undefined {
-    return this.entries.get(name);
+    const entry = this.entries.get(name);
+    return entry ? { ...entry } : undefined;
   }
 }
 
@@ -81,16 +97,19 @@ export class Watchdog {
   private readonly restarts = new Map<string, number[]>();
   private readonly escalations: number[] = [];
   private readonly sentCards = new Set<string>();
+  private readonly board: HealthBoard;
+  private readonly policy: WatchdogPolicy;
+  private readonly nowFn: () => number;
 
-  constructor(
-    private readonly board: HealthBoard,
-    private readonly policy: WatchdogPolicy,
-    private readonly now: () => number,
-  ) {}
+  constructor(board: HealthBoard, policy: WatchdogPolicy = DEFAULT_WATCHDOG_POLICY, now: () => number = Date.now) {
+    this.board = board;
+    this.policy = policy;
+    this.nowFn = now;
+  }
 
-  /** Returns at most one action. Suppression guarantees a single card per root cause. */
+  /** At most one action. Suppression guarantees a single card per root cause. */
   evaluate(entry: HealthEntry): HealingAction | undefined {
-    const now = this.now();
+    const now = this.nowFn();
     const hour = 3_600_000;
     const recent = (this.restarts.get(entry.name) ?? []).filter((t) => now - t < hour);
     this.restarts.set(entry.name, recent);
@@ -102,12 +121,12 @@ export class Watchdog {
       return { level: 0, entry: entry.name, action: "retry", delay_ms: 2_000 * 2 ** entry.consecutive_failures };
     }
 
-    // L2: format fingerprint mismatch / missing cursor -> rebuild projection from the log.
+    // L2: a projection fingerprint mismatch or a missing cursor is healed from the log.
     if (entry.last_error_code === "format_fingerprint_mismatch" || entry.last_error_code === "cursor_missing") {
       return { level: 2, entry: entry.name, action: "rebuild_projection" };
     }
 
-    // L1: plugin crash -> restart after 30s, within budget.
+    // L1: a crashed plugin restarts after a delay, within budget.
     if (recent.length < this.policy.restart_budget_per_component_per_hour) {
       recent.push(now);
       return {
@@ -118,8 +137,10 @@ export class Watchdog {
       };
     }
 
-    // L3: budget exhausted -> degrade (disable source / pause processing), no human interruption yet.
+    // L3: budget exhausted -> degrade locally, still no human interruption.
+    // Count the automatic escalation, otherwise the ladder could never reach L4.
     if (this.escalationsInHour() < this.policy.max_auto_escalations_per_hour) {
+      this.escalations.push(now);
       return {
         level: 3,
         entry: entry.name,
@@ -127,7 +148,7 @@ export class Watchdog {
       };
     }
 
-    // L4: one actionable card. Digest suppression: same root cause never asks twice.
+    // L4: one actionable card. The same root cause never asks twice.
     const key = `watchdog:${digestOf({ entry: entry.name, code: entry.last_error_code }).slice(8, 24)}`;
     if (this.sentCards.has(key)) return undefined;
     this.sentCards.add(key);
@@ -145,21 +166,22 @@ export class Watchdog {
     };
   }
 
+  /** The watchdog itself is also budgeted: it reports through its own claimed entry. */
+  self(entry: HealthEntry): void {
+    if (this.board.get("watchdog")) {
+      this.board.report("watchdog", "watchdog", entry.state === "ok", entry.last_error_code, this.nowFn());
+    }
+  }
+
   private escalationsInHour(): number {
-    const now = this.now();
+    const now = this.nowFn();
     const recent = this.escalations.filter((t) => now - t < 3_600_000);
     this.escalations.length = 0;
     this.escalations.push(...recent);
     return recent.length;
   }
-
-  /** Watchdog's own failures are also reported through its own claimed entry. */
-  self(entry: HealthEntry): void {
-    this.board.report("watchdog", "watchdog", entry.state === "ok", entry.last_error_code, this.now());
-  }
 }
 
-/** Failure -> level mapping inherits the upstream docs/protocol.md failure table. */
 export const FAILURE_LEVELS: Record<string, Level> = {
   duplicate_event: 0,
   lost_claim_response: 0,

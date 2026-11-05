@@ -13,7 +13,9 @@ python -m http.server 8080
 # 浏览器打开 http://127.0.0.1:8080
 ```
 
-连接真实后端：把顶部「API 地址」改成中台地址（例如 `https://agent.example.com`），点「连接后端」。前端会探测 `GET /v1/super/overview`；成功则切到真实数据并用 SSE 订阅 `GET /v1/stream?after=`，失败则留在演示数据。中台默认只听 `127.0.0.1`，跨域需要同源部署或反向代理放开 CORS（见 `docs/05`）。
+连接真实后端：把顶部「API 地址」改成中台地址（默认 `http://127.0.0.1:8787`），点「连接后端」。前端会探测 `GET /v1/super/overview`；成功则切到真实数据并用 SSE 订阅 `GET /v1/stream?after=`，失败则留在演示数据。中台默认只听 `127.0.0.1`；**M2 已实现 `/v1/super/*` 只读端点**，loopback 放行同源与 `file://`（`Origin: null`），其它来源必须带 owner key，详见 `docs/M2_READONLY_PLANE.md §3`。
+
+> **M2 阶段写操作会失败**：批准 / 拒绝 / 撤销授权调用的命令端点统一返回 `405 writes_require_explicit_command`，前端会提示错误；这些是 M3 的交付。真实模式下的只读浏览、项目切换、筛选、因果链抽屉、事实流均可用。
 
 ## 能点什么
 

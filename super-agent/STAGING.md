@@ -4,13 +4,14 @@
 
 ## 为什么集中放在 `super-agent/`
 
-为了不触碰、不覆盖上游 `agent-autoloop` 的任何原有文件（`kernel/`、`host/`、`protocol/`、`worker/`、`cli/`、`plugins/`、`tests/`、`sim/` 全部保持原样），本轮交付统一放在这个新增目录下。到 M1–M4 实施时，再按 `docs/01-源码对照与移植映射.md §5` 的改造点把模板落到对应目录：
+M0/M1 阶段为了不覆盖上游 `agent-autoloop` 的任何原有文件，交付统一放在这个新增目录下。**M2 起才有三处最小增量改动**：`kernel/evolve.ts`（+5 行，追加两张投影表）、`sim/invariants.ts`（回放 oracle 共享 `TABLES`）、`host/http.ts`（+1 行挂载 super handler，41 行仍在架构测试的 50 行上限内）。每处都有回归测试守护，原有 handler 语义与 `/v1` 协议不变。详见 `docs/M2_READONLY_PLANE.md`。
 
 | 暂存位置 | 目标位置（M1+） |
 | --- | --- |
 | ~~`src/kernel/*.ts`~~（M1 已落地，副本已删除） | `kernel/fact.ts` / `approval.ts` / `excitation.ts` / `grants.ts` / `five-questions.ts`；M2 再扩展 `evolve.ts` / `decide.ts` |
 | `src/domain/ports.ts` | `domain/ports.ts` |
-| `src/host/*.ts` | `host/`（新增 `eventstore.ts` / `assessor.ts` / `effects.ts` / `outbox.ts` / `watchdog.ts` / `blackboard.ts`） |
+| `src/host/{eventstore,blackboard,watchdog}.ts` | **M2 已落地**：`host/super-eventstore.ts` / `super-blackboard.ts` / `super-watchdog.ts`，副本已删除 |
+| `src/host/assessor.ts` | M3 落位（主会话 LLM 评估旁路，结论以 `eval.decided` 回写） |
 | `src/web/api.ts` | `web/api.ts` |
 | `web/index.html` 等 | `web/`（可交互前端，可直接运行） |
 | `schemas/fact.schema.json` | `protocol/fact.schema.json` 或 `schemas/` |
@@ -24,7 +25,9 @@
 - **不做「审计追踪 DeepSeek」**：保留通用审计（因果链 / why / 回放 / fork / 断点）与主会话 LLM 评估；不记录模型调用明细、不生成模型审计摘要。见 `docs/02-事件内核-回放-fork-断点-审计.md §6.2`。
 - **M0 基线已记录**：Windows 本机不作为正式基线，正式基线复用底座 CI 的 Linux + macOS 双矩阵；本机 `npm ci` / `typecheck` / 63 项纯内核回归全绿。见 `docs/M0_BASELINE.md`。
 - **M1 纯内核已接线**：四个 L0 组件落到 `kernel/` 顶层，新增五问组合器 `kernel/five-questions.ts` 与 `tests/super-agent-kernel.test.ts`（31 项）；底座原有文件零改动，`purity.test.ts` 6/6 守护通过。接线中修掉了类型、去重契约、external taint 传播三个真实缺陷，详见 `docs/M0_BASELINE.md §5`。
-- **host / web / schema 层模板仍是骨架，未接线**；后端实现按 `docs/05` 的 M0–M5 里程碑推进，下一站 M2。
+- **M2 只读控制平面已接线**：`approvals` / `grants` 投影、`host/super-{blackboard,eventstore,watchdog,api}.ts`、`/v1/super/*` 只读端点与 SSE、`tests/super-agent-host.test.ts`（16 项）。写命令端点统一 405，留给 M3。见 `docs/M2_READONLY_PLANE.md`。
+- **M0 正式基线已判定通过**：CI run `42021872381` 的 Linux + macOS 双矩阵全部 success。
+- **schema 层与 `src/domain/ports.ts`、`src/web/api.ts` 仍是契约文件**；下一站 M3（写命令 + Assessor）。
 
 ## 落地时必须留意的三条底座约束
 

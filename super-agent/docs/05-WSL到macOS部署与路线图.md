@@ -200,5 +200,6 @@ macOS 生产（`deploy/launchd.plist`）：
 1. ✅ `schemas/fact.schema.json` 与 `config/rules.example.json` 已作为契约基线评审掉。
 2. ✅ M1 已完成：四个纯函数模板落到 `kernel/` 顶层，新增五问组合器 `kernel/five-questions.ts` 与 `tests/super-agent-kernel.test.ts`（31 项），I1–I2、新增 I8 及审批 / 熔断 / 复验矩阵跑通；底座原文件零改动。平台基线与三个已修缺陷见 `docs/M0_BASELINE.md`。
 3. 用底座 `sim/random.ts` 加一个「Agent 自引用事件」场景，验证现有 `MAX_HOPS=8` 行为，作为 M3 的对照基线。
-4. M2 入口：扩展 `evolve.ts` 的 `TABLES` 纳入 `approvals` / `grants` 投影，把 `src/host/*` 模板落到 `host/`，接 `/v1/super/*` 只读端点与 SSE。
-5. 三个决策点已由 master 拍板：fork 已执行、可交互前端已交付、不做「审计追踪 DeepSeek」；按 `docs/00 §8` 的已定结论推进 M0–M2。
+4. ✅ M2 已完成：投影表扩展、三个 host 只读组件落地、`/v1/super/*` 只读端点与 SSE、16 项单测。写命令统一 405。详见 `docs/M2_READONLY_PLANE.md`。
+5. M3 入口：写命令端点（审批回答 / 撤销授权 / 策略保存 / 评估结论回写）、`assessor.ts` 主会话 LLM 评估旁路、分支调试端点、HealthBoard 实时接线。
+6. 三个决策点已由 master 拍板：fork 已执行、可交互前端已交付、不做「审计追踪 DeepSeek」；按 `docs/00 §8` 的已定结论推进 M0–M3。

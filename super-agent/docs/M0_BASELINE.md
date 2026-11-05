@@ -41,10 +41,13 @@ node --version   # v24.22.2
 | 绿色子集合计 | ✅ 63/63 | 上述四项合跑，`duration_ms ≈ 20241` |
 | `npm test`（完整） | ❌ 未采用 | Windows 平台失败 + 后台挂起 10 分钟后终止，见 §4 |
 | `npm run format:check` | ❌ 本机假象 | 191 个文件告警，原因是 CRLF，见 §4 |
+| **CI 双矩阵（正式基线）** | ✅ **success / success** | run `42021872381`：`ubuntu-latest` + `macos-latest`，`npm ci` / `format:check` / `typecheck` / `npm test` / `install-smoke.sh` 全绿 |
 
 > **首次 CI 实跑（run `42021596862`，2026-11-05）**：`format:check` 失败，8 个文件告警，**全部来自第一提交 `b8e70cb` 的暂存模板**（`config/rules.example.json`、`schemas/fact.schema.json`、`src/domain/ports.ts`、`src/host/*.ts`、`src/web/api.ts`）——它们从未经过 prettier；M1 新增文件全部合规。已对这 8 个文件执行 `prettier --write`，校验 `prettier --check` 与 JSON 可解析均通过，并重新触发 CI。
 >
-> 这条教训值得记住：本机 Windows 的「191 文件全红」是 CRLF 噪音，它**掩盖了真实的 8 文件格式缺陷**。平台假象与真实回归必须分开判定，不能因为本机全红就跳过格式检查。`check.yml` 只在 `main` push / PR 时自动触发，因此本分支首次跑 CI 是手动 `workflow_dispatch`；后续每次推送都应手动触发或开 PR。
+> **最终结果（run `42021872381`）**：`ubuntu-latest` 与 `macos-latest` 两个 job **全部 success**，完整 `npm test` 与 `install-smoke.sh` 均通过。**M0 正式基线判定通过**，Windows 本机结果不再作为判定依据。
+>
+> 这条教训值得记住：本机 Windows 的「191 文件全红」是 CRLF 噪音，它**掩盖了真实的 8 文件格式缺陷**。平台假象与真实回归必须分开判定，不能因为本机全红就跳过格式检查。`check.yml` 只在 `main` push / PR 时自动触发，因此本分支每次跑 CI 都用手动 `workflow_dispatch`；后续可开 PR 让它自动触发。
 
 绿色子集复现命令：
 

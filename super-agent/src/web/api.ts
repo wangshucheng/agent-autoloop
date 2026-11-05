@@ -91,7 +91,11 @@ export interface TraceResponse {
   verdict: "consistent" | "inconsistent";
 }
 
-/** Hard constraints enforced by host/http.ts (same-origin, body limit, one status per failure kind). */
+/**
+ * Hard constraints. M2 implements them in host/super-api.ts: same-origin with a loopback
+ * exception for file:// pages, owner-key auth off loopback, and a recursive response scrub
+ * for neverExpose. Command endpoints arrive in M3 and must enforce auth before the 405 check.
+ */
 export const CONSTRAINTS = {
   sameOriginOnly: true,
   maxBodyBytes: 64 * 1024,
