@@ -202,5 +202,6 @@ macOS 生产（`deploy/launchd.plist`）：
 3. 用底座 `sim/random.ts` 加一个「Agent 自引用事件」场景，验证现有 `MAX_HOPS=8` 行为，作为 M3 的对照基线。
 4. ✅ M2 已完成：投影表扩展、三个 host 只读组件落地、`/v1/super/*` 只读端点与 SSE、16 项单测。写命令统一 405。详见 `docs/M2_READONLY_PLANE.md`。
 5. ✅ M3 已完成：五类显式写命令（每个只产一条事实、经 `commit()` 落盘）、主会话评估旁路、分支调试端点、HealthBoard 实时接线、20 项单测；合并绿色回归 135/135。详见 `docs/M3_COMMANDS_AND_ASSESSMENT.md`。
-6. M4 入口：把 `rules.json` 的 `super.*` 配置接进运行时、真实组件接 HealthBoard、物化投影替换日志扫描、Webhook / 飞书卡片 / 定时 / 多项目生产接线、WSL → macOS 迁移压测。
-7. 三个决策点已由 master 拍板：fork 已执行、可交互前端已交付、不做「审计追踪 DeepSeek」；按 `docs/00 §8` 的已定结论推进 M0–M4。
+6. ✅ M4 第一批已完成：示例配置拆成 `rules.json` + `super.json`（前者已通过底座 `parseRules()`）、运行时接真实配置、前端 owner key 与 SSE 修正、10 项单测。详见 `docs/M4_CONFIG_AND_FRONTEND.md`。
+7. M4 第二批：真实组件接 HealthBoard / Watchdog 自愈动作、物化投影替换日志扫描、Webhook / 飞书卡片 / 定时 / 多项目生产接线、WSL → macOS 迁移压测；需要真实凭据与目标平台，本环境无法验证。
+8. 三个决策点已由 master 拍板：fork 已执行、可交互前端已交付、不做「审计追踪 DeepSeek」；按 `docs/00 §8` 的已定结论推进 M0–M4。

@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STAGING="$(cd "$SCRIPT_DIR/.." && pwd)"          # super-agent/
 ROOT="$(cd "$STAGING/.." && pwd)"                # fork root (has package.json)
 CONFIG="$STAGING/config/rules.example.json"
+SUPER_CONFIG="$STAGING/config/super.example.json"
 STATE_DIR="${AGENT_AUTOLOOP_HOME:-$HOME/.agent-autoloop}"
 
 echo "==> checking runtime (fork root: $ROOT)"
@@ -25,10 +26,15 @@ mkdir -p "$STATE_DIR/logs" "$STATE_DIR/work" "$STATE_DIR/branches" "$STATE_DIR/a
 chmod 0700 "$STATE_DIR"
 find "$STATE_DIR" -maxdepth 1 -type f -exec chmod 0600 {} +
 
-echo "==> install config (never overwrite an existing rules.json)"
+echo "==> install config (never overwrite an existing file)"
 if [[ ! -f "$STATE_DIR/rules.json" ]]; then
   cp "$CONFIG" "$STATE_DIR/rules.json"
   echo "    wrote $STATE_DIR/rules.json (REVIEW IT: contains example ids and answerers)"
+fi
+# The super plane lives in its own file: the upstream rules validator rejects unknown fields.
+if [[ ! -f "$STATE_DIR/super.json" ]]; then
+  cp "$SUPER_CONFIG" "$STATE_DIR/super.json"
+  echo "    wrote $STATE_DIR/super.json (REVIEW IT: accept_mode, projects, budgets)"
 fi
 
 echo "==> baseline (the authoritative full run is CI: ubuntu-latest + macos-latest)"

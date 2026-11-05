@@ -19,6 +19,7 @@
   var state = {
     mode: "demo",
     apiBase: "http://127.0.0.1:8787",
+    ownerKey: "",
     projectId: "home-deco",
     approvalMode: "gate",
     laneFilter: null,
@@ -99,7 +100,13 @@
   function fetchJSON(path, opts) {
     var ctrl = new AbortController();
     var timer = setTimeout(function () { ctrl.abort(); }, 2000);
-    return fetch(state.apiBase.replace(/\/$/, "") + path, Object.assign({ signal: ctrl.signal }, opts || {}))
+    var init = Object.assign({}, opts || {});
+    var headers = Object.assign({}, init.headers || {});
+    // Loopback reads need no key, but every M3 command does.
+    if (state.ownerKey) headers.Authorization = "Bearer " + state.ownerKey;
+    init.signal = ctrl.signal;
+    init.headers = headers;
+    return fetch(state.apiBase.replace(/\/$/, "") + path, init)
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .finally(function () { clearTimeout(timer); });
   }
@@ -135,6 +142,8 @@
       state.mode = "live";
       state.overview = unwrap(data);
       closeDemoStream();
+      state.lastSeq = 0;
+      state.factCount = 0;
       startEventSource();
       refreshLive();
       if (!silent) toast("已连接真实后端");
@@ -184,11 +193,16 @@
     badge.className = "badge" + (state.mode === "live" ? " live" : "");
     var banner = $("mode-banner");
     banner.className = "banner" + (state.mode === "live" ? " live" : "");
+    var keyInput = '<span class="banner-inline">Owner key <input id="owner-key" type="password" value="' +
+      esc(state.ownerKey) + '" placeholder="写操作必填" autocomplete="off" spellcheck="false">' +
+      '<button data-act="connect" class="btn btn-small">' + (state.mode === "live" ? "重连" : "重试连接") + '</button></span>';
     banner.innerHTML = state.mode === "live"
-      ? '<span>已连接 <b>' + esc(state.apiBase) + '</b>：写操作会调用命令端点，请谨慎操作。</span><span class="banner-inline">只读为主 · 破坏性操作二次确认</span>'
+      ? '<span>已连接 <b>' + esc(state.apiBase) + '</b>：' +
+        (state.ownerKey ? '写操作已带 owner key，请谨慎操作。' : '<b>写操作需要 owner key</b>，未填写时命令返回 401。') +
+        '</span>' + keyInput
       : '<span>当前为<b>演示数据</b>：所有交互都在本地生效，不会写入真实系统。</span>' +
-        '<span class="banner-inline">API 地址 <input id="api-base" type="text" value="' + esc(state.apiBase) + '" spellcheck="false">' +
-        '<button data-act="connect" class="btn btn-small">重试连接</button></span>';
+        '<span class="banner-inline">API 地址 <input id="api-base" type="text" value="' +
+        esc(state.apiBase) + '" spellcheck="false"></span>' + keyInput;
   }
 
   function renderNeeds() {
@@ -501,8 +515,9 @@
     if (state.eventSource) state.eventSource.close();
     if (typeof EventSource === "undefined") return;
     try {
-      state.eventSource = new EventSource(state.apiBase.replace(/\/$/, "") + "/v1/stream?after=" + state.lastSeq);
-      state.eventSource.onmessage = function (e) {
+      // EventSource cannot send an Authorization header; the super stream is read-only on loopback.
+      state.eventSource = new EventSource(state.apiBase.replace(/\/$/, "") + "/v1/super/stream?after=" + state.lastSeq);
+      var onFact = function (e) {
         if (state.streamPaused) return;
         try {
           var fact = JSON.parse(e.data);
@@ -511,6 +526,8 @@
           renderFooter();
         } catch (err) { /* ignore malformed frame */ }
       };
+      state.eventSource.onmessage = onFact;
+      state.eventSource.addEventListener("fact", onFact);
       state.eventSource.onerror = function () { toast("事实流断开，已保留当前视图"); };
     } catch (err) { /* no SSE available */ }
   }
@@ -521,7 +538,11 @@
     var el = e.target.closest("[data-act]");
     if (!el) return;
     var act = el.dataset.act, id = el.dataset.id;
-    if (act === "connect") { state.apiBase = ($("api-base") || {}).value || state.apiBase; tryConnect(false); return; }
+    if (act === "connect") {
+      state.apiBase = ($("api-base") || {}).value || state.apiBase;
+      var keyEl = $("owner-key"); if (keyEl) state.ownerKey = keyEl.value.trim();
+      tryConnect(false); return;
+    }
     if (act === "lane") { state.laneFilter = id || null; renderLaneTabs(); renderBoard(); return; }
     if (act === "collapse") { state.collapsed[id] = !state.collapsed[id]; renderBoard(); return; }
     if (act === "open") { openDrawer(id); return; }
@@ -587,7 +608,9 @@
   });
 
   document.addEventListener("input", function (e) {
-    if (e.target && e.target.id === "api-base") state.apiBase = e.target.value;
+    if (!e.target) return;
+    if (e.target.id === "api-base") state.apiBase = e.target.value;
+    if (e.target.id === "owner-key") state.ownerKey = e.target.value.trim();
   });
 
   $("health-toggle").addEventListener("click", function () {
@@ -601,6 +624,7 @@
 
   $("btn-connect").addEventListener("click", function () {
     state.apiBase = ($("api-base") || {}).value || state.apiBase;
+    var keyEl = $("owner-key"); if (keyEl) state.ownerKey = keyEl.value.trim();
     tryConnect(false);
   });
   $("btn-clear-filter").addEventListener("click", function () {

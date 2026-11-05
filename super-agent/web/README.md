@@ -13,11 +13,11 @@ python -m http.server 8080
 # 浏览器打开 http://127.0.0.1:8080
 ```
 
-连接真实后端：把顶部「API 地址」改成中台地址（默认 `http://127.0.0.1:8787`），点「连接后端」。前端会探测 `GET /v1/super/overview`；成功则切到真实数据并用 SSE 订阅 `GET /v1/stream?after=`，失败则留在演示数据。中台默认只听 `127.0.0.1`；**M2 已实现 `/v1/super/*` 只读端点**，loopback 放行同源与 `file://`（`Origin: null`），其它来源必须带 owner key，详见 `docs/M2_READONLY_PLANE.md §3`。
+连接真实后端：把顶部「API 地址」改成中台地址（默认 `http://127.0.0.1:8787`），点「连接后端」。前端会探测 `GET /v1/super/overview`；成功则切到真实数据并用 SSE 订阅 `GET /v1/super/stream?after=`，失败则留在演示数据。中台默认只听 `127.0.0.1`，loopback 放行同源与 `file://`（`Origin: null`）的只读请求。
 
-> **M3 起写操作已接通**：批准 / 拒绝 / 撤销授权会真正写一条事实。但**所有写命令都需要 owner key**（`Authorization: Bearer <owner-key>`），包括 `127.0.0.1`；没有 key 时返回 `401 writes_require_owner_key`。只读浏览在 loopback 仍免 key。命令契约见 `docs/M3_COMMANDS_AND_ASSESSMENT.md §3`。
+> **M4 起前端可填写 owner key**：在 banner 的「Owner key」输入框填入密钥后点「重连」，后续所有请求（含写命令）自动带 `Authorization: Bearer <owner-key>`。密钥只存在浏览器内存、不写入 URL；只读浏览在 loopback 仍免 key。SSE 走 `/v1/super/stream`——`EventSource` 无法发送自定义 header，而该端点在 loopback 只读免 key。命令契约见 `docs/M3_COMMANDS_AND_ASSESSMENT.md §3`。
 >
-> 前端目前不带 Authorization 头，因此真实模式下只读可用、写操作会收到 401；需要写操作时可在中台前挂同源代理注入 owner key，或给前端加一个 key 输入框（M4）。
+> 中台从 `~/.agent-autoloop/super.json` 读取 `super.*` 配置；`rules.json` 只放底座原生字段。两份示例分别在 `config/rules.example.json` 与 `config/super.example.json`，见 `docs/M4_CONFIG_AND_FRONTEND.md`。
 
 ## 能点什么
 
@@ -39,7 +39,7 @@ python -m http.server 8080
 | 前端动作 | 预留接口 |
 | --- | --- |
 | 首屏 / 项目切换 | `GET /v1/super/overview?project=` · `GET /v1/super/blackboard?project=` |
-| 增量更新 | `GET /v1/stream?after=&branch=&project=`（SSE，`Last-Event-ID` 续读） |
+| 增量更新 | `GET /v1/super/stream?after=&project=`（SSE，`event: fact`，`after` 续读）；底座原生的 `GET /v1/stream` 仍保留 |
 | 追踪抽屉 | `GET /v1/super/trace/:correlation_id` · `GET /v1/super/audit/trace/:run_id` |
 | 审批回答 | `POST /v1/super/approvals/:id/answer`（等价 `card.answered`） |
 | 撤销授权 | `POST /v1/super/grants/:id/revoke` |

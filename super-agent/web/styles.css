@@ -35,12 +35,13 @@ h1, h2, h3, p { margin: 0; }
 .topbar-controls { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 .field { display: flex; flex-direction: column; gap: 4px; }
 .field span { font-size: 11px; color: var(--text-3); }
-.field select, #api-base, #search-input {
+.field select, #api-base, #owner-key, #search-input {
   background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
   padding: 6px 10px; outline: none; min-height: 32px;
 }
-.field select:focus, #api-base:focus, #search-input:focus { border-color: var(--blue); }
+.field select:focus, #api-base:focus, #owner-key:focus, #search-input:focus { border-color: var(--blue); }
 #api-base { width: 190px; font-family: var(--mono); font-size: 12px; }
+#owner-key { width: 150px; font-family: var(--mono); font-size: 12px; }
 #search-input { width: 240px; }
 
 .btn { background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px; padding: 6px 12px; min-height: 32px; }

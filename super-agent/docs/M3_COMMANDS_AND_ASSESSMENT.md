@@ -97,11 +97,13 @@ HealthBoard 不再是空实现：`liveDeps()` 创建实例并 claim `super-api` 
 | `npm run test:sim` 20000 步 | ✅ 31.1s / 1644 completed |
 | `host/http.ts` 行数 | 41 ≤ 50（架构断言） |
 | 新 host 文件 SQL 扫描 | 无越权写日志 / 投影 |
-| CI 双矩阵 | 推送后触发，结果回填 |
+| CI 双矩阵 | ✅ run `42036512095`：`ubuntu-latest` + `macos-latest` **全部 success**，完整 `npm test` 与 `install-smoke.sh` 通过 |
 
 Windows 本机 `rules` / `conformance` / `format` 测试的 `EPERM` / ESM URL 失败仍是已知平台假象（见 `M0_BASELINE.md §4`），CI 上为绿。
 
-## 9. M4 入口
+## 9. M4 入口（第一批已完成，见 `M4_CONFIG_AND_FRONTEND.md`）
+
+> M4 第一批已把 `super.*` 配置接进运行时、修掉示例配置无法启动中台的缺陷、给前端补上 owner key 与正确的 SSE 端点。以下清单保留为 M4 第二批待办。
 
 1. 把 `super.policy.accept_mode`、`super.eval.*`、`super.watchdog.*` 从 `rules.json` 接进 `liveDeps()`，替换当前的默认常量。
 2. 把真实组件（worker / channel / source / delivery）接入 HealthBoard，并让 Watchdog 的自愈动作落到实际组件。

@@ -14,7 +14,15 @@ import {
 } from "./super-blackboard.ts";
 import type { HealthEntry } from "./super-watchdog.ts";
 import { HealthBoard } from "./super-watchdog.ts";
-import { DEFAULT_ASSESSOR_CONFIG, MainSessionAssessor, type AssessmentOutcome } from "./super-assessor.ts";
+import { MainSessionAssessor, type AssessmentOutcome } from "./super-assessor.ts";
+import {
+  DEFAULT_SUPER_CONFIG,
+  capacityFor,
+  loadSuperConfig,
+  superConfigPath,
+  type SuperConfig,
+} from "./super-config.ts";
+import { HOME } from "./home.ts";
 import { isCommandPath, parseCommand, prepareCommand, stateFromFacts, type CommandState } from "./super-commands.ts";
 import type { BranchRow, Breakpoint, MainLog, ReplayState } from "./super-eventstore.ts";
 
@@ -22,7 +30,6 @@ export const PREFIX = "/v1/super";
 const NO_STORE = { "cache-control": "no-store" };
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
 const DEFAULT_WINDOW_MS = 24 * 3_600_000;
-const DEFAULT_MAX_FACTS = 5000;
 const MAX_BODY = 64 * 1024;
 
 /** Fields that must never leave the process, even if a projection row happens to carry one. */
@@ -63,6 +70,7 @@ export interface SuperDeps {
   writeFact(fact: FactV2): void;
   assessor: MainSessionAssessor;
   timedOut(): Array<{ eval_id: string; outcome: AssessmentOutcome }>;
+  config?: SuperConfig;
   debug?: SuperDebugDeps;
 }
 
@@ -270,6 +278,7 @@ async function handleDebug(deps: SuperDeps, request: Request, path: string): Pro
 
 async function route(deps: SuperDeps, request: Request, url: URL): Promise<Response> {
   const path = url.pathname;
+  const cfg = deps.config ?? DEFAULT_SUPER_CONFIG;
 
   // Same-origin only. A local file:// page sends Origin: null, allowed on loopback so the
   // zero-build frontend can be opened by double-clicking it.
@@ -313,6 +322,7 @@ async function route(deps: SuperDeps, request: Request, url: URL): Promise<Respo
         now,
         health_problems: problems,
         suppressed: deps.suppressed(),
+        worker_capacity: capacityFor(cfg, project),
       }),
     );
   }
@@ -345,7 +355,7 @@ async function route(deps: SuperDeps, request: Request, url: URL): Promise<Respo
       paused: state.paused,
       prefix: PREFIX,
       commands_enabled: true,
-      accept_mode: "observe",
+      accept_mode: cfg.accept_mode,
     });
   }
 
@@ -419,18 +429,22 @@ async function liveDeps(): Promise<SuperDeps> {
   const { whose } = await import("../kernel/credentials.ts");
   const store = await import("../kernel/store.ts");
   const eventstore = await import("./super-eventstore.ts");
-  const maxFacts = Number(process.env.AGENT_AUTOLOOP_SUPER_MAX_FACTS ?? DEFAULT_MAX_FACTS);
+  const config = loadSuperConfig(superConfigPath(HOME));
+  const maxFacts = Number(process.env.AGENT_AUTOLOOP_SUPER_MAX_FACTS ?? config.max_facts);
 
-  const board = new HealthBoard();
-  for (const name of ["super-api", "watchdog", "assessor"]) board.claim(name, name, Date.now());
+  const board = new HealthBoard(config.watchdog.transient_failure_threshold);
+  for (const name of config.health_components) board.claim(name, name, Date.now());
+  const report = (name: string, healthy: boolean, code?: string) => {
+    if (config.health_components.includes(name)) board.report(name, name, healthy, code, Date.now());
+  };
 
   const timedOut: Array<{ eval_id: string; outcome: AssessmentOutcome }> = [];
   const assessor = new MainSessionAssessor(
-    () => DEFAULT_ASSESSOR_CONFIG,
+    () => config.assessor,
     Date.now,
     (evalId, outcome) => {
       timedOut.push({ eval_id: evalId, outcome });
-      board.report("assessor", "assessor", false, "timeout", Date.now());
+      report("assessor", false, "timeout");
     },
   );
 
@@ -439,6 +453,7 @@ async function liveDeps(): Promise<SuperDeps> {
 
   return {
     now: Date.now,
+    config,
     policyVersion: () => String(hub.getView().get("config", "rules")?.version ?? "unversioned"),
     seq: () => hub.getView().seq,
     facts: recent,
@@ -453,7 +468,7 @@ async function liveDeps(): Promise<SuperDeps> {
       const stored = fact as unknown as Fact;
       store.commit(hub.db, view, () => [stored]);
       hub.publish(fact.type, [stored]);
-      board.report("super-api", "super-api", true, undefined, Date.now());
+      report("super-api", true);
     },
     assessor,
     timedOut: () => [...timedOut],

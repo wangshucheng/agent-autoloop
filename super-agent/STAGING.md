@@ -15,7 +15,8 @@ M0/M1 阶段为了不覆盖上游 `agent-autoloop` 的任何原有文件，交�
 | `src/web/api.ts` | `web/api.ts` |
 | `web/index.html` 等 | `web/`（可交互前端，可直接运行） |
 | `schemas/fact.schema.json` | `protocol/fact.schema.json` 或 `schemas/` |
-| `config/rules.example.json` | `~/.agent-autoloop/rules.json` 的扩展示例 |
+| `config/rules.example.json` | `~/.agent-autoloop/rules.json`（**只含底座原生字段**，单测验证可被 `parseRules()` 接受） |
+| `config/super.example.json` | `~/.agent-autoloop/super.json`（M4 新增，承载 `super.*` 与 bindings） |
 | `deploy/` | `deploy/`（launchd / systemd 单元） |
 
 ## 本轮状态
@@ -28,7 +29,8 @@ M0/M1 阶段为了不覆盖上游 `agent-autoloop` 的任何原有文件，交�
 - **M0 正式基线已判定通过**：CI run `42021872381` 的 Linux + macOS 双矩阵全部 success。
 - **M2 只读控制平面已接线**：`approvals` / `grants` 投影、`host/super-{blackboard,eventstore,watchdog,api}.ts`、`/v1/super/*` 只读端点与 SSE、`tests/super-agent-host.test.ts`（16 项）。CI run `42032246684` 双矩阵 success。见 `docs/M2_READONLY_PLANE.md`。
 - **M3 显式写命令与评估旁路已接线**：`host/super-commands.ts`（五类命令 → 一条事实）、`host/super-assessor.ts`（候选卡 → `eval.decided` 回写）、鉴权前置、分支调试、HealthBoard 实时、`tests/super-agent-m3.test.ts`（20 项）。合并绿色回归 135/135。见 `docs/M3_COMMANDS_AND_ASSESSMENT.md`。
-- **schema 层与 `src/domain/ports.ts`、`src/web/api.ts` 仍是契约文件**；下一站 M4（真实配置 / 组件接线 / 物化投影 / 生产平台）。
+- **M4 第一批已完成**：修掉「示例配置会让中台无法启动」的缺陷，拆出 `super.json`，`host/super-config.ts` 与 `liveDeps()` 接真实配置，前端补 owner key 输入并改用 super SSE；10 项单测（含 `node:vm` 前端冒烟）。见 `docs/M4_CONFIG_AND_FRONTEND.md`。
+- **schema 层与 `src/domain/ports.ts`、`src/web/api.ts` 仍是契约文件**；M4 第二批（真实组件自愈 / 物化投影 / Webhook 飞书 / WSL→macOS 压测）需要真实运行环境，本环境无法验证。
 
 ## 落地时必须留意的三条底座约束
 
