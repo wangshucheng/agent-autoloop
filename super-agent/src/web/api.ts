@@ -41,7 +41,13 @@ export const RESERVED_ROUTES: Route[] = [
   { method: "GET", path: `${PREFIX}/attention`, access: "read", auth: "owner", summary: "注意力预算计量" },
 
   // Commands (write). Same HTTP interface as CLI / MCP.
-  { method: "POST", path: `${PREFIX}/eval/:id/decision`, access: "command", auth: "owner", summary: "主会话评估结论写回" },
+  {
+    method: "POST",
+    path: `${PREFIX}/eval/:id/decision`,
+    access: "command",
+    auth: "owner",
+    summary: "主会话评估结论写回",
+  },
   { method: "POST", path: `${PREFIX}/approvals/:id/answer`, access: "command", auth: "owner", summary: "审批回答" },
   { method: "POST", path: `${PREFIX}/grants/:id/revoke`, access: "command", auth: "owner", summary: "撤销授权" },
   { method: "POST", path: `${PREFIX}/policy/save`, access: "command", auth: "owner", summary: "CAS 保存策略" },
@@ -62,7 +68,7 @@ export interface Envelope<T> {
   data?: T;
   error?: { code: string; message: string };
   policy_version?: string;
-  stream_after?: number;       // client uses this with GET /v1/stream?after=
+  stream_after?: number; // client uses this with GET /v1/stream?after=
   now: number;
 }
 
@@ -70,8 +76,14 @@ export interface TraceResponse {
   correlation_id: string;
   project_id: string;
   chain: Array<{
-    seq: number; type: string; actor?: string; trust?: string;
-    hops: number; policy_version?: string; grant_id?: string; reason?: string;
+    seq: number;
+    type: string;
+    actor?: string;
+    trust?: string;
+    hops: number;
+    policy_version?: string;
+    grant_id?: string;
+    reason?: string;
   }>;
   attention: { cards: number; questions: number; words: number };
   cost: { tokens: number; usd: number };
@@ -84,6 +96,14 @@ export const CONSTRAINTS = {
   sameOriginOnly: true,
   maxBodyBytes: 64 * 1024,
   defaultListen: "127.0.0.1",
-  neverExpose: ["key_hash", "run_token", "card_link_token", "master_key", "prompt_text", "credentials", "model_call_details"],
+  neverExpose: [
+    "key_hash",
+    "run_token",
+    "card_link_token",
+    "master_key",
+    "prompt_text",
+    "credentials",
+    "model_call_details",
+  ],
   writesRequireExplicitCommand: true,
 } as const;

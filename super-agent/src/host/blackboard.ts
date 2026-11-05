@@ -3,8 +3,15 @@
 import type { FactV2 } from "../kernel/fact.ts";
 
 export type LaneId =
-  | "intake" | "evaluating" | "would_accept" | "authorized" | "working"
-  | "waiting_person" | "suspended" | "done" | "tripped";
+  | "intake"
+  | "evaluating"
+  | "would_accept"
+  | "authorized"
+  | "working"
+  | "waiting_person"
+  | "suspended"
+  | "done"
+  | "tripped";
 
 export interface BoardItem {
   id: string;
@@ -22,14 +29,25 @@ export interface BoardItem {
   actions: string[];
 }
 
-export interface BoardLane { id: LaneId; label: string; count: number; items: BoardItem[] }
+export interface BoardLane {
+  id: LaneId;
+  label: string;
+  count: number;
+  items: BoardItem[];
+}
 
 export interface Overview {
-  needs_person: { count: number; items: BoardItem[] };   // only block expanded by default
+  needs_person: { count: number; items: BoardItem[] }; // only block expanded by default
   health: { status: "ok" | "degraded" | "failing"; problems: Array<Record<string, unknown>>; suppressed: number };
   activity_24h: {
-    triggers: number; evals: number; accepted: number; runs: number; cards: number;
-    questions: number; tokens: number; cost_usd: number;
+    triggers: number;
+    evals: number;
+    accepted: number;
+    runs: number;
+    cards: number;
+    questions: number;
+    tokens: number;
+    cost_usd: number;
     attention: { cards_per_owner_hour: number; actionable_ratio: number };
     worker_load: { running: number; capacity: number };
   };
@@ -41,8 +59,15 @@ export interface Overview {
 export function lanesFromFacts(facts: FactV2[], projectId: string, now: number): BoardLane[] {
   const lanes = new Map<LaneId, BoardItem[]>();
   const order: LaneId[] = [
-    "intake", "evaluating", "would_accept", "authorized", "working",
-    "waiting_person", "suspended", "done", "tripped",
+    "intake",
+    "evaluating",
+    "would_accept",
+    "authorized",
+    "working",
+    "waiting_person",
+    "suspended",
+    "done",
+    "tripped",
   ];
   for (const lane of order) lanes.set(lane, []);
 
@@ -68,32 +93,58 @@ export function lanesFromFacts(facts: FactV2[], projectId: string, now: number):
   }
 
   return order.map((id) => ({
-    id, label: LANE_LABELS[id], count: lanes.get(id)!.length, items: lanes.get(id)!,
+    id,
+    label: LANE_LABELS[id],
+    count: lanes.get(id)!.length,
+    items: lanes.get(id)!,
   }));
 }
 
 const LANE_LABELS: Record<LaneId, string> = {
-  intake: "新事件", evaluating: "研判中", would_accept: "本来会接", authorized: "已授权",
-  working: "执行中", waiting_person: "待人", suspended: "挂起零消耗", done: "完成", tripped: "熔断/阻断",
+  intake: "新事件",
+  evaluating: "研判中",
+  would_accept: "本来会接",
+  authorized: "已授权",
+  working: "执行中",
+  waiting_person: "待人",
+  suspended: "挂起零消耗",
+  done: "完成",
+  tripped: "熔断/阻断",
 };
 
 function laneOf(fact: FactV2): LaneId | undefined {
   switch (fact.type) {
-    case "trigger.received": return "intake";
-    case "eval.started": return "evaluating";
-    case "eval.decided": return (fact.meta?.reason?.code === "would_accept") ? "would_accept" : "authorized";
-    case "grant.created": return "authorized";
-    case "assignment.started": case "run.claimed": return "working";
-    case "card.created": case "approval.required": return "waiting_person";
-    case "timer.scheduled": case "run.cancelled": return "suspended";
-    case "ticket.ended": case "run.result": return "done";
-    case "excitation.tripped": case "grant.revoked": return "tripped";
-    default: return undefined;
+    case "trigger.received":
+      return "intake";
+    case "eval.started":
+      return "evaluating";
+    case "eval.decided":
+      return fact.meta?.reason?.code === "would_accept" ? "would_accept" : "authorized";
+    case "grant.created":
+      return "authorized";
+    case "assignment.started":
+    case "run.claimed":
+      return "working";
+    case "card.created":
+    case "approval.required":
+      return "waiting_person";
+    case "timer.scheduled":
+    case "run.cancelled":
+      return "suspended";
+    case "ticket.ended":
+    case "run.result":
+      return "done";
+    case "excitation.tripped":
+    case "grant.revoked":
+      return "tripped";
+    default:
+      return undefined;
   }
 }
 
 const titleOf = (f: FactV2) => String((f.changes[0]?.row as Record<string, unknown> | null)?.title ?? f.type);
-const previewOf = (f: FactV2) => String((f.changes[0]?.row as Record<string, unknown> | null)?.text ?? "").slice(0, 120);
+const previewOf = (f: FactV2) =>
+  String((f.changes[0]?.row as Record<string, unknown> | null)?.text ?? "").slice(0, 120);
 const stateOf = (f: FactV2) => String((f.changes[0]?.row as Record<string, unknown> | null)?.state ?? f.type);
 const waitingFor = (f: FactV2): string | undefined =>
   ["card.created", "approval.required"].includes(f.type) ? "owner" : undefined;
@@ -106,14 +157,18 @@ function actionsOf(f: FactV2): string[] {
 }
 
 /** Overview answers three questions in order; healthy state takes no space. */
-export function overviewOf(lanes: BoardLane[], healthProblems: Array<Record<string, unknown>>, suppressed: number): Overview {
+export function overviewOf(
+  lanes: BoardLane[],
+  healthProblems: Array<Record<string, unknown>>,
+  suppressed: number,
+): Overview {
   const waiting = lanes.find((l) => l.id === "waiting_person")!.items;
   return {
     needs_person: { count: waiting.length, items: waiting },
     health: {
       status: healthProblems.length ? "degraded" : "ok",
       problems: healthProblems,
-      suppressed,                        // one number, never a list of transient errors
+      suppressed, // one number, never a list of transient errors
     },
     activity_24h: {
       triggers: lanes.find((l) => l.id === "intake")!.count,
@@ -122,11 +177,12 @@ export function overviewOf(lanes: BoardLane[], healthProblems: Array<Record<stri
       runs: lanes.find((l) => l.id === "working")!.count,
       cards: waiting.length,
       questions: waiting.filter((i) => i.kind === "approval.required").length,
-      tokens: 0, cost_usd: 0,
+      tokens: 0,
+      cost_usd: 0,
       attention: { cards_per_owner_hour: 0, actionable_ratio: waiting.length ? 1 : 0 },
       worker_load: { running: lanes.find((l) => l.id === "working")!.count, capacity: 4 },
     },
     policy_version: "P8",
-    now: 0,                              // supplied by the host clock
+    now: 0, // supplied by the host clock
   };
 }

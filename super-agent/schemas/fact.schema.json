@@ -9,7 +9,11 @@
   "properties": {
     "version": { "type": "integer", "enum": [1, 2] },
     "seq": { "type": "integer", "minimum": 1, "description": "Monotonic sequence number, unique per branch." },
-    "at": { "type": "integer", "minimum": 0, "description": "Logical time in ms, supplied by the host. The kernel never reads the clock." },
+    "at": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Logical time in ms, supplied by the host. The kernel never reads the clock."
+    },
     "type": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)*$" },
     "changes": {
       "type": "array",
@@ -27,18 +31,35 @@
         "table": {
           "type": "string",
           "enum": [
-            "events", "runs", "run_events", "cards", "deliveries", "timers", "schedules", "seen", "keys",
-            "config", "due", "threads", "subscriptions", "tickets", "grants", "decisions",
-            "approvals", "effects", "outbox", "health", "branches", "breakpoints", "audit"
+            "events",
+            "runs",
+            "run_events",
+            "cards",
+            "deliveries",
+            "timers",
+            "schedules",
+            "seen",
+            "keys",
+            "config",
+            "due",
+            "threads",
+            "subscriptions",
+            "tickets",
+            "grants",
+            "decisions",
+            "approvals",
+            "effects",
+            "outbox",
+            "health",
+            "branches",
+            "breakpoints",
+            "audit"
           ]
         },
         "key": { "type": "string", "minLength": 1 },
         "row": {
           "description": "null removes the projection row.",
-          "oneOf": [
-            { "type": "null" },
-            { "type": "object", "additionalProperties": true }
-          ]
+          "oneOf": [{ "type": "null" }, { "type": "object", "additionalProperties": true }]
         }
       }
     },
@@ -50,14 +71,27 @@
         "project_id": { "type": "string", "default": "default", "minLength": 1 },
         "correlation_id": { "type": "string", "minLength": 1, "description": "Stable id for the whole causal chain." },
         "causation_id": { "type": "integer", "minimum": 1, "description": "seq of the direct parent fact." },
-        "actor": { "type": "string", "minLength": 1, "examples": ["source:github", "worker:mac", "channel:feishu", "assessor", "owner", "watchdog"] },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "examples": ["source:github", "worker:mac", "channel:feishu", "assessor", "owner", "watchdog"]
+        },
         "trust": { "type": "string", "enum": ["system", "operator", "external", "model"] },
         "taint": { "type": "string", "enum": ["none", "external"], "default": "none" },
-        "hops": { "type": "integer", "minimum": 0, "default": 0, "description": "Never reset by human answers, timers or retries." },
+        "hops": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Never reset by human answers, timers or retries."
+        },
         "policy_version": { "type": "string", "minLength": 1 },
         "grant_id": { "type": "string", "minLength": 1 },
         "attention_cost": { "type": "number", "minimum": 0, "default": 0 },
-        "digest": { "type": "string", "minLength": 1, "description": "Normalized content hash used for self-excitation dedup." },
+        "digest": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Normalized content hash used for self-excitation dedup."
+        },
         "reason": {
           "type": "object",
           "required": ["code"],

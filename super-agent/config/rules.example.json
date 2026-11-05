@@ -143,7 +143,12 @@
         }
       },
       "rules": [
-        { "id": "issue-triage", "name": "处理新 Issue", "instruction": "只分类与复现，不推送、不合并", "enabled": true },
+        {
+          "id": "issue-triage",
+          "name": "处理新 Issue",
+          "instruction": "只分类与复现，不推送、不合并",
+          "enabled": true
+        },
         { "id": "ops-alert", "name": "线上告警排查", "instruction": "先读日志定位；重启需审批", "enabled": true }
       ]
     },
@@ -242,8 +247,15 @@
       "dashboard": { "default_expanded": "needs_person" },
       "blackboard": {
         "lanes": [
-          "intake", "evaluating", "would_accept", "authorized",
-          "working", "waiting_person", "suspended", "done", "tripped"
+          "intake",
+          "evaluating",
+          "would_accept",
+          "authorized",
+          "working",
+          "waiting_person",
+          "suspended",
+          "done",
+          "tripped"
         ],
         "collapsed_lanes": ["done"]
       }

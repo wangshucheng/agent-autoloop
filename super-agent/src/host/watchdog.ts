@@ -5,8 +5,8 @@ import { digestOf } from "../kernel/fact.ts";
 export type HealthState = "ok" | "degraded" | "failing" | "disabled" | "recovering";
 
 export interface HealthEntry {
-  name: string;                 // runtime | evals | assessment | launch | delivery | relay | notice | reply | worker | source:<id> | watchdog
-  owner: string;                // the ONLY component allowed to write it
+  name: string; // runtime | evals | assessment | launch | delivery | relay | notice | reply | worker | source:<id> | watchdog
+  owner: string; // the ONLY component allowed to write it
   state: HealthState;
   consecutive_failures: number;
   last_success_at?: number;
@@ -17,7 +17,7 @@ export interface HealthEntry {
 export interface WatchdogPolicy {
   restart_budget_per_component_per_hour: number;
   max_auto_escalations_per_hour: number;
-  transient_failure_threshold: number;    // 3 consecutive failures before it becomes a system problem
+  transient_failure_threshold: number; // 3 consecutive failures before it becomes a system problem
   escalation_suppression_minutes: number;
   plugin_restart_seconds: number;
   on_budget_exhausted: "disable_component_and_notify_once";
@@ -44,7 +44,12 @@ export class HealthBoard {
     }
     this.owners.set(name, owner);
     this.entries.set(name, {
-      name, owner, state: "ok", consecutive_failures: 0, since: now, last_success_at: now,
+      name,
+      owner,
+      state: "ok",
+      consecutive_failures: 0,
+      since: now,
+      last_success_at: now,
     });
   }
 
@@ -52,7 +57,10 @@ export class HealthBoard {
     if (this.owners.get(name) !== owner) throw new Error(`only ${this.owners.get(name)} may write ${name}`);
     const entry = this.entries.get(name)!;
     if (ok) {
-      entry.state = "ok"; entry.consecutive_failures = 0; entry.last_success_at = now; entry.last_error_code = undefined;
+      entry.state = "ok";
+      entry.consecutive_failures = 0;
+      entry.last_success_at = now;
+      entry.last_error_code = undefined;
     } else {
       entry.consecutive_failures += 1;
       entry.last_error_code = code;
@@ -61,8 +69,12 @@ export class HealthBoard {
     return { ...entry };
   }
 
-  all(): HealthEntry[] { return [...this.entries.values()].map((e) => ({ ...e })); }
-  get(name: string): HealthEntry | undefined { return this.entries.get(name); }
+  all(): HealthEntry[] {
+    return [...this.entries.values()].map((e) => ({ ...e }));
+  }
+  get(name: string): HealthEntry | undefined {
+    return this.entries.get(name);
+  }
 }
 
 export class Watchdog {
@@ -99,7 +111,9 @@ export class Watchdog {
     if (recent.length < this.policy.restart_budget_per_component_per_hour) {
       recent.push(now);
       return {
-        level: 1, entry: entry.name, action: "restart",
+        level: 1,
+        entry: entry.name,
+        action: "restart",
         delay_ms: this.policy.plugin_restart_seconds * 1000,
       };
     }
@@ -107,7 +121,8 @@ export class Watchdog {
     // L3: budget exhausted -> degrade (disable source / pause processing), no human interruption yet.
     if (this.escalationsInHour() < this.policy.max_auto_escalations_per_hour) {
       return {
-        level: 3, entry: entry.name,
+        level: 3,
+        entry: entry.name,
         action: entry.name.startsWith("source:") ? "disable_component" : "pause_processing",
       };
     }
@@ -118,7 +133,9 @@ export class Watchdog {
     this.sentCards.add(key);
     this.escalations.push(now);
     return {
-      level: 4, entry: entry.name, action: "notify_once",
+      level: 4,
+      entry: entry.name,
+      action: "notify_once",
       card: {
         key,
         title: `组件 ${entry.name} 需要你处理`,
@@ -144,10 +161,23 @@ export class Watchdog {
 
 /** Failure -> level mapping inherits the upstream docs/protocol.md failure table. */
 export const FAILURE_LEVELS: Record<string, Level> = {
-  duplicate_event: 0, lost_claim_response: 0, lost_result_response: 0,
-  agent_failed: 0, receipt_malformed: 0, db_locked: 0, missed_cron: 0,
-  plugin_unhandled_error: 1, worker_or_channel_stopped: 1, log_write_failed: 1,
-  format_fingerprint_mismatch: 2, hub_restart: 2,
-  worker_silent_5min: 3, worker_machine_gone: 3, invalid_rules_file: 3, rule_renamed: 3,
-  heal_budget_exhausted: 4, consistency_check_failed: 4, human_login_required: 4,
+  duplicate_event: 0,
+  lost_claim_response: 0,
+  lost_result_response: 0,
+  agent_failed: 0,
+  receipt_malformed: 0,
+  db_locked: 0,
+  missed_cron: 0,
+  plugin_unhandled_error: 1,
+  worker_or_channel_stopped: 1,
+  log_write_failed: 1,
+  format_fingerprint_mismatch: 2,
+  hub_restart: 2,
+  worker_silent_5min: 3,
+  worker_machine_gone: 3,
+  invalid_rules_file: 3,
+  rule_renamed: 3,
+  heal_budget_exhausted: 4,
+  consistency_check_failed: 4,
+  human_login_required: 4,
 };

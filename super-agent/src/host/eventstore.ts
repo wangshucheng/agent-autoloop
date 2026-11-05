@@ -4,14 +4,21 @@ import type { DatabaseSync } from "node:sqlite";
 import type { FactV2 } from "../kernel/fact.ts";
 
 export interface BranchRow {
-  name: string; parent: string | null; base_seq: number;
-  created_at: string; purpose: "what-if" | "debug" | "audit";
+  name: string;
+  parent: string | null;
+  base_seq: number;
+  created_at: string;
+  purpose: "what-if" | "debug" | "audit";
 }
 
 export interface Breakpoint {
-  id: string; branch: string;
-  type?: string[]; project_id?: string; seq?: number;
-  correlation_id?: string; predicate?: string;
+  id: string;
+  branch: string;
+  type?: string[];
+  project_id?: string;
+  seq?: number;
+  correlation_id?: string;
+  predicate?: string;
   action: "pause" | "snapshot" | "log";
 }
 
@@ -38,20 +45,25 @@ export function* iterateBranch(
   to = Number.MAX_SAFE_INTEGER,
 ): Generator<FactV2> {
   const row = db.prepare("SELECT parent, base_seq FROM branches WHERE name=?").get(branch) as
-    | { parent: string | null; base_seq: number } | undefined;
+    { parent: string | null; base_seq: number } | undefined;
   if (!row) return;
   if (row.parent) yield* iterateBranch(db, row.parent, from, Math.min(to, row.base_seq));
-  const local = db.prepare(
-    "SELECT seq, fact FROM facts_branch WHERE branch=? AND seq>? AND seq<=? ORDER BY seq",
-  ).iterate(branch, from, to);
+  const local = db
+    .prepare("SELECT seq, fact FROM facts_branch WHERE branch=? AND seq>? AND seq<=? ORDER BY seq")
+    .iterate(branch, from, to);
   for (const r of local) yield JSON.parse(String((r as { fact: string }).fact)) as FactV2;
 }
 
 export function fork(db: DatabaseSync, fromSeq: number, name: string, purpose: BranchRow["purpose"]): void {
   db.exec("BEGIN IMMEDIATE");
   try {
-    db.prepare("INSERT INTO branches(name,parent,base_seq,created_at,purpose) VALUES(?,?,?,?,?)")
-      .run(name, "main", fromSeq, new Date().toISOString(), purpose);
+    db.prepare("INSERT INTO branches(name,parent,base_seq,created_at,purpose) VALUES(?,?,?,?,?)").run(
+      name,
+      "main",
+      fromSeq,
+      new Date().toISOString(),
+      purpose,
+    );
     // No history copy. Projection inherits the parent's "next" high-water marks at base_seq.
     db.exec("COMMIT");
   } catch (error) {
