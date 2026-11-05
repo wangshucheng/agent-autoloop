@@ -64,6 +64,7 @@ interface FactV2 {
 | I5 | 任何 `grant.*` 事实必须能追溯到一条 `eval.decided` 或 `trigger.received(explicit)` | 回放校验 |
 | I6 | 重放不重跑规则、不重跑模型、不重发卡片 | 回放器只调用 `evolve` |
 | I7 | 分支投影 = 父分支 `[1..base_seq]` + 分支本地事实，逐条重放结果一致 | `tests/fork.spec.ts` |
+| I8 | `taint: external` 沿因果链继承，子事实不得清除或降级；`trust` 同步继承 | `kernel/fact.ts` 的 `childOf` 构造 `meta` 时校验（M1 已实现） |
 
 ---
 
@@ -270,7 +271,7 @@ agent-autoloop audit <run|ticket|correlation_id> --full
 | `GET /v1/runs/42/why` | 保留；`--trace` 输出完整因果链与评估/授权摘要 |
 | `agent-autoloop backup/restore` | 保留；backup 需一并带走 `branches`、`audit`、`policy.json`、`config/prompts/`，权限仍 0700/0600 |
 | 格式指纹重建 | 保留；指纹计算纳入 `kernel/approval.ts`、`excitation.ts`、`grants.ts` 三个新文件（底座指纹只算 `evolve/credentials`） |
-| `sim/random.ts` / `crash.ts` / `mutate.ts` | 保留；新增 I1–I7 不变量到 `sim/invariants.ts`，新增分支/断点/审计场景 |
+| `sim/random.ts` / `crash.ts` / `mutate.ts` | 保留；新增 I1–I8 不变量到 `sim/invariants.ts`，新增分支/断点/审计场景 |
 | `why` 默认不打印规则正文 | 保留；`--full` 才显示（避免信息过载，符合最小注意力） |
 
 ---
@@ -284,4 +285,4 @@ agent-autoloop audit <run|ticket|correlation_id> --full
 | `tests/fork.spec.ts` | 分叉 O(1)；前缀共享；父分支不受污染；嵌套 fork 正确 |
 | `tests/breakpoint.spec.ts` | 只停分支；pause/step/continue；inspector 只读 |
 | `tests/audit.spec.ts` | 因果链完整；不落模型调用明细；审计视图与在线事实一致 |
-| `sim/invariants.ts` 扩展 | I1–I7 在 200000 步模拟与 8! 动作穷举中始终成立 |
+| `sim/invariants.ts` 扩展 | I1–I8 在 200000 步模拟与 8! 动作穷举中始终成立 |

@@ -197,7 +197,8 @@ macOS 生产（`deploy/launchd.plist`）：
 
 ## 9. 立即可做的下一步（不需外部授权）
 
-1. 在本仓库把 `schemas/fact.schema.json` 与 `config/rules.example.json` 作为契约基线评审掉。
-2. 把 `src/kernel/*.ts` 三个纯函数模板搬进 fork 的 `kernel/`，先写 `tests/` 把 I1–I7 跑通。
+1. ✅ `schemas/fact.schema.json` 与 `config/rules.example.json` 已作为契约基线评审掉。
+2. ✅ M1 已完成：四个纯函数模板落到 `kernel/` 顶层，新增五问组合器 `kernel/five-questions.ts` 与 `tests/super-agent-kernel.test.ts`（31 项），I1–I2、新增 I8 及审批 / 熔断 / 复验矩阵跑通；底座原文件零改动。平台基线与三个已修缺陷见 `docs/M0_BASELINE.md`。
 3. 用底座 `sim/random.ts` 加一个「Agent 自引用事件」场景，验证现有 `MAX_HOPS=8` 行为，作为 M3 的对照基线。
-4. 三个决策点已由 master 拍板：fork 已执行、可交互前端已交付、不做「审计追踪 DeepSeek」；按 `docs/00 §8` 的已定结论推进 M0–M2。
+4. M2 入口：扩展 `evolve.ts` 的 `TABLES` 纳入 `approvals` / `grants` 投影，把 `src/host/*` 模板落到 `host/`，接 `/v1/super/*` 只读端点与 SSE。
+5. 三个决策点已由 master 拍板：fork 已执行、可交互前端已交付、不做「审计追踪 DeepSeek」；按 `docs/00 §8` 的已定结论推进 M0–M2。

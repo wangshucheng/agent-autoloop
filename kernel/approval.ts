@@ -16,7 +16,7 @@ export interface ApprovalOverride {
   rule?: string;
   category: string;
   mode: ApprovalMode;
-  reason: string;                    // required when mode is "off" on a risky category
+  reason: string; // required when mode is "off" on a risky category
 }
 
 export interface ApprovalPolicy {
@@ -41,14 +41,15 @@ export interface ApprovalContext {
   amount_usd?: number;
   auto_attempts?: number;
   confidence?: number;
-  askFirstHit?: boolean;             // upstream rules.json askFirst compatibility
-  openCardsWithSameKey?: number;     // upstream createCard dedup
+  askFirstHit?: boolean; // upstream rules.json askFirst compatibility
+  openCardsWithSameKey?: number; // upstream createCard dedup
   key: string;
   policy_version: string;
 }
 
 export type ApprovalDecision =
-  | { kind: "allow"; mode: "off"; fact: "approval.auto" }
+  // "escalate" also allows while its threshold has not been tripped yet.
+  | { kind: "allow"; mode: "off" | "escalate"; fact: "approval.auto" }
   | { kind: "notify"; mode: "notify"; fact: "approval.auto"; card: CardSpec }
   | { kind: "suspend"; mode: "gate" | "escalate"; fact: "approval.required"; card: CardSpec }
   | { kind: "deny"; mode: "gate"; fact: "approval.denied" };
@@ -100,14 +101,15 @@ export function decideApproval(policy: ApprovalPolicy, ctx: ApprovalContext): Ap
       return { kind: "allow", mode, fact: "approval.auto" };
     case "notify":
       return {
-        kind: "notify", mode, fact: "approval.auto",
+        kind: "notify",
+        mode,
+        fact: "approval.auto",
         card: { ...card, kind: "notice", fyi: true, options: [], attention_cost: 0 },
       };
     case "escalate": {
       const category = policy.categories[ctx.category] ?? { mode: "escalate" as const };
       const attempts = ctx.auto_attempts ?? 0;
-      const lowConfidence = category.min_confidence !== undefined
-        && (ctx.confidence ?? 1) < category.min_confidence;
+      const lowConfidence = category.min_confidence !== undefined && (ctx.confidence ?? 1) < category.min_confidence;
       const tripped = attempts >= (category.after_auto_attempts ?? 2) || lowConfidence;
       return tripped
         ? { kind: "suspend", mode, fact: "approval.required", card }
@@ -120,20 +122,22 @@ export function decideApproval(policy: ApprovalPolicy, ctx: ApprovalContext): Ap
 }
 
 /** The change set emitted with the approval fact. evolve() is the only projection writer. */
-export function approvalChanges(
-  decision: ApprovalDecision,
-  ctx: ApprovalContext,
-  seq: number,
-): Change[] {
+export function approvalChanges(decision: ApprovalDecision, ctx: ApprovalContext, seq: number): Change[] {
   const id = digestOf({ key: ctx.key, project: ctx.project_id, seq }).slice(0, 24);
   return [
     {
       table: "approvals",
       key: id,
       row: {
-        id, key: ctx.key, project_id: ctx.project_id, rule: ctx.rule,
-        category: ctx.category, mode: decision.mode, result: decision.kind,
-        policy_version: ctx.policy_version, created_at: 0, // filled by decide() from logical time
+        id,
+        key: ctx.key,
+        project_id: ctx.project_id,
+        rule: ctx.rule,
+        category: ctx.category,
+        mode: decision.mode,
+        result: decision.kind,
+        policy_version: ctx.policy_version,
+        created_at: 0, // filled by decide() from logical time
       },
     },
   ];

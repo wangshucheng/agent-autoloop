@@ -36,8 +36,16 @@ export interface PolicySnapshot {
 
 export type Revalidation =
   | { held: true; reason: "source_still_listening" | "explicit_followup" | "all_checks_passed" }
-  | { held: false; reason: "source_no_longer_listening" | "sender_removed" | "bot_removed"
-      | "rule_disabled" | "accept_mode_not_auto" | "admission_weakened" };
+  | {
+      held: false;
+      reason:
+        | "source_no_longer_listening"
+        | "sender_removed"
+        | "bot_removed"
+        | "rule_disabled"
+        | "accept_mode_not_auto"
+        | "admission_weakened";
+    };
 
 export function createGrant(
   input: Omit<Grant, "state" | "created_at" | "revoked_at" | "revoke_reason">,
@@ -52,7 +60,12 @@ export function revokeGrant(
   now: number,
 ): Grant {
   if (grant.state !== "active") return grant;
-  return { ...grant, state: reason === "manual_stop" ? "withdrawn" : "revoked", revoked_at: now, revoke_reason: reason };
+  return {
+    ...grant,
+    state: reason === "manual_stop" ? "withdrawn" : "revoked",
+    revoked_at: now,
+    revoke_reason: reason,
+  };
 }
 
 /**
@@ -98,8 +111,7 @@ export function revalidate(grant: Grant, policy: PolicySnapshot): Revalidation {
 
 function inferredStillValid(grant: Grant, policy: PolicySnapshot): boolean {
   if (policy.accept_mode !== "auto") return false;
-  return grant.matched_rules.length > 0
-    && grant.matched_rules.every((rule) => policy.enabled_rules.includes(rule));
+  return grant.matched_rules.length > 0 && grant.matched_rules.every((rule) => policy.enabled_rules.includes(rule));
 }
 
 /** Facts for grant lifecycle. evolve() applies them; no other writer touches "grants". */

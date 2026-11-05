@@ -19,8 +19,8 @@ export interface Reason {
 }
 
 export interface FactMeta {
-  branch?: string;                   // default "main"
-  project_id?: string;               // default "default"
+  branch?: string; // default "main"
+  project_id?: string; // default "default"
   correlation_id?: string;
   causation_id?: number;
   actor?: string;
@@ -37,7 +37,7 @@ export interface FactMeta {
 export interface FactV2 {
   version: 1 | 2;
   seq: number;
-  at: number;                        // logical time supplied by the host
+  at: number; // logical time supplied by the host
   type: string;
   changes: Change[];
   meta?: FactMeta;
@@ -55,25 +55,32 @@ export function digestOf(parts: Record<string, unknown>): string {
 /**
  * Build a child fact. Pure: everything that could vary comes in as arguments.
  * I1: causation_id must point to an existing earlier fact on the same branch.
+ * I2: hops never decrease. I8: external taint propagates and cannot be washed off.
  */
 export function childOf(
   parent: FactV2,
   next: Omit<FactV2, "version" | "seq" | "at" | "meta"> & { meta?: FactMeta },
   now: number,
 ): FactV2 {
-  const meta: FactMeta = {
+  const inherited: FactMeta = {
     branch: parent.meta?.branch ?? "main",
     project_id: parent.meta?.project_id ?? "default",
     correlation_id: parent.meta?.correlation_id ?? `c-${parent.seq}`,
     causation_id: parent.seq,
     hops: parent.meta?.hops ?? 0,
-    ...next.meta,
   };
+  // Trust and taint are provenance, not decoration: a derived fact inherits them.
+  if (parent.meta?.trust !== undefined) inherited.trust = parent.meta.trust;
+  if (parent.meta?.taint !== undefined) inherited.taint = parent.meta.taint;
+  const meta: FactMeta = { ...inherited, ...next.meta };
   if (meta.causation_id !== undefined && meta.causation_id >= parent.seq + 1) {
     throw new Error("I1 violated: causation_id must reference an earlier fact");
   }
   if ((next.meta?.hops ?? meta.hops ?? 0) < (parent.meta?.hops ?? 0)) {
     throw new Error("I2 violated: hops must never decrease");
+  }
+  if (parent.meta?.taint === "external" && meta.taint !== "external") {
+    throw new Error("I8 violated: external taint cannot be cleared down a causal chain");
   }
   return { version: 2, seq: parent.seq + 1, at: now, type: next.type, changes: next.changes, meta };
 }
