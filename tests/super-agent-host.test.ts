@@ -29,6 +29,7 @@ import {
   type MainLog,
 } from "../host/super-eventstore.ts";
 import { makeSuperHandler, NEVER_EXPOSE, type SuperDeps } from "../host/super-api.ts";
+import { DEFAULT_ASSESSOR_CONFIG, MainSessionAssessor } from "../host/super-assessor.ts";
 
 const NOW = 1_700_000_000_000;
 const HOUR = 3_600_000;
@@ -66,9 +67,16 @@ const APPROVAL_ROW = { id: "a1", project_id: "p1", result: "suspend", policy_ver
 
 function makeDeps(overrides: Partial<SuperDeps> = {}) {
   let listener = () => {};
+  const written: FactV2[] = [];
+  const assessor = new MainSessionAssessor(
+    () => DEFAULT_ASSESSOR_CONFIG,
+    () => NOW,
+    () => {},
+  );
   const deps: SuperDeps = {
     now: () => NOW,
     policyVersion: () => "v3",
+    seq: () => FACTS.at(-1)!.seq,
     facts: () => FACTS,
     factsAfter: (after) => FACTS.filter((f) => f.seq > after),
     rows: (table, match = {}) => {
@@ -84,9 +92,15 @@ function makeDeps(overrides: Partial<SuperDeps> = {}) {
       listener = fn;
       return () => {};
     },
+    writeFact: (fact) => {
+      written.push(fact);
+      listener();
+    },
+    assessor,
+    timedOut: () => [],
     ...overrides,
   };
-  return { deps, notify: () => listener() };
+  return { deps, notify: () => listener(), written };
 }
 
 const request = (path: string, init: RequestInit = {}) => new Request(BASE + path, init);
@@ -363,7 +377,7 @@ test("auth: loopback reads need no key, non-loopback does, cross-origin is refus
   assert.equal((await dataOf(await handle(localFile))).ok, true);
 });
 
-test("M2 is read-only: every command is refused with an explicit reason", async () => {
+test("M3: every command needs an owner key, even on loopback", async () => {
   const { deps } = makeDeps();
   const handle = makeSuperHandler(deps);
   for (const path of [
@@ -374,9 +388,18 @@ test("M2 is read-only: every command is refused with an explicit reason", async 
   ]) {
     const response = await handle(request(path, { method: "POST", body: "{}" }));
     assert.ok(response);
-    assert.equal(response.status, 405, path);
-    assert.equal((await dataOf(response)).error.code, "writes_require_explicit_command", path);
+    assert.equal(response.status, 401, path);
+    assert.equal((await dataOf(response)).error.code, "writes_require_owner_key", path);
   }
+  const unknown = await handle(
+    request("/v1/super/unknown-command", {
+      method: "POST",
+      headers: { authorization: "Bearer owner-key" },
+      body: "{}",
+    }),
+  );
+  assert.equal(unknown!.status, 405);
+  assert.equal((await dataOf(unknown)).error.code, "writes_require_explicit_command");
 });
 
 test("read endpoints return the typed envelope the frontend unwraps", async () => {

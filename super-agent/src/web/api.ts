@@ -92,9 +92,10 @@ export interface TraceResponse {
 }
 
 /**
- * Hard constraints. M2 implements them in host/super-api.ts: same-origin with a loopback
- * exception for file:// pages, owner-key auth off loopback, and a recursive response scrub
- * for neverExpose. Command endpoints arrive in M3 and must enforce auth before the 405 check.
+ * Hard constraints. M3 implements them in host/super-api.ts: same-origin with a loopback
+ * exception for file:// pages (reads only), owner-key auth for every command on every host,
+ * a 64 KB body limit, instruction-field rejection, and a recursive response scrub for
+ * neverExpose. Every command produces exactly one fact through commit().
  */
 export const CONSTRAINTS = {
   sameOriginOnly: true,

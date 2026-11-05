@@ -108,6 +108,19 @@ export function* iterateBranch(
   for (const r of local) yield JSON.parse(String((r as { fact: string }).fact)) as FactV2;
 }
 
+/**
+ * Branch-local facts only. The production main log is never written from the host:
+ * kernel/store.commit() is its sole writer. OR REPLACE makes a what-if step idempotent.
+ */
+export function appendBranchFact(db: DatabaseSync, branch: string, fact: FactV2): void {
+  ensureSchema(db);
+  db.prepare("INSERT OR REPLACE INTO facts_branch(branch,seq,fact) VALUES(?,?,?)").run(
+    branch,
+    fact.seq,
+    JSON.stringify(fact),
+  );
+}
+
 export function addBreakpoint(db: DatabaseSync, bp: Breakpoint): void {
   ensureSchema(db);
   db.prepare("INSERT OR REPLACE INTO breakpoints(id,branch,spec) VALUES(?,?,?)").run(

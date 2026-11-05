@@ -98,9 +98,11 @@ cd super-agent/web && python -m http.server 8080
 | `tests/schema.test.ts` | ✅ 7/7 |
 | `host/http.ts` 行数 | 41 ≤ 50（架构断言） |
 | Windows `rules` / `conformance` / `format` 测试 | ❌ 已知 `EPERM` 临时目录与 ESM URL 平台假象，见 `M0_BASELINE.md §4`；CI 上为绿 |
-| CI 双矩阵 | 推送后触发，结果回填本表 |
+| CI 双矩阵 | ✅ run `42032246684`：`ubuntu-latest` + `macos-latest` **全部 success**，完整 `npm test` 与 `install-smoke.sh` 通过 |
 
-## 6. M3 入口
+## 6. M3 入口（已全部完成，见 `M3_COMMANDS_AND_ASSESSMENT.md`）
+
+> 以下清单保留为当时的计划记录：写命令端点、Assessor 旁路、分支调试端点、HealthBoard 实时接线均已在 M3 落地。M2 的 405 与空 `health()` 已成为历史状态。
 
 1. 实现写命令：`approvals/:id/answer`、`grants/:id/revoke`、`policy/save`、`eval/:id/decision`，全部以**显式命令**经 `commit()` 写事实；鉴权前置，loopback 便利取消。
 2. 落地 `src/host/assessor.ts`：主会话 LLM 评估旁路，结论以一条 `eval.decided` 事实回写，只带 `policy_version` + `reason.code`；回放不重跑模型。

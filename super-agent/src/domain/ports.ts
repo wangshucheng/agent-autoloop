@@ -1,5 +1,8 @@
 // Narrow role interfaces, ported from dsh docs/007 "Explicit, narrow dependencies".
 // The kernel exposes one entry point; every caller sees only the Pick it needs.
+// M3 status: this file is a contract overview only. The running definitions live in
+// host/super-{assessor,commands,api,blackboard,eventstore,watchdog}.ts; keep this file in sync
+// when a port changes, but never import runtime code from here.
 import type { FactV2 } from "../kernel/fact.ts";
 
 /** Ports the L2 domain receives from L1 host. Nothing here can do I/O on its own. */

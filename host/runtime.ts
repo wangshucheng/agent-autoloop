@@ -105,6 +105,11 @@ export const onChange = (listener: Listener) => {
   return () => listeners.delete(listener);
 };
 
+/** Super commands append facts through commit(); wake the same listeners execute() wakes. */
+export function publish(type: string, facts: Fact[]): void {
+  if (facts.length) for (const listener of listeners) listener(type, facts);
+}
+
 export function execute(type: string, args: any[], now = Date.now()) {
   let facts: Fact[] = [];
   let value: any;
@@ -112,7 +117,7 @@ export function execute(type: string, args: any[], now = Date.now()) {
     ({ facts, value } = decide(latest, { type, args }, now, environment));
     return facts;
   });
-  if (facts.length) for (const listener of listeners) listener(type, facts);
+  publish(type, facts);
   return value;
 }
 

@@ -1,8 +1,10 @@
-// L1 host. The /v1/super/* read-only control plane.
+// L1 host. The /v1/super/* control plane.
 // Every upstream /v1 path, field and auth rule is untouched: this handler answers only its own
-// prefix and returns undefined for everything else. No writes, no commands, no model calls.
+// prefix and returns undefined for everything else. M3 adds explicit commands, each producing
+// exactly ONE fact through kernel/store.commit(); the runtime never writes on its own initiative.
 import type { FactV2 } from "../kernel/fact.ts";
-import type { Row } from "../kernel/evolve.ts";
+import type { Fact, Row } from "../kernel/evolve.ts";
+import { commit } from "../kernel/store.ts";
 import {
   attentionFromFacts,
   lanesFromFacts,
@@ -11,12 +13,17 @@ import {
   traceFromFacts,
 } from "./super-blackboard.ts";
 import type { HealthEntry } from "./super-watchdog.ts";
+import { HealthBoard } from "./super-watchdog.ts";
+import { DEFAULT_ASSESSOR_CONFIG, MainSessionAssessor, type AssessmentOutcome } from "./super-assessor.ts";
+import { isCommandPath, parseCommand, prepareCommand, stateFromFacts, type CommandState } from "./super-commands.ts";
+import type { BranchRow, Breakpoint, MainLog, ReplayState } from "./super-eventstore.ts";
 
 export const PREFIX = "/v1/super";
 const NO_STORE = { "cache-control": "no-store" };
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
 const DEFAULT_WINDOW_MS = 24 * 3_600_000;
 const DEFAULT_MAX_FACTS = 5000;
+const MAX_BODY = 64 * 1024;
 
 /** Fields that must never leave the process, even if a projection row happens to carry one. */
 export const NEVER_EXPOSE = [
@@ -30,10 +37,21 @@ export const NEVER_EXPOSE = [
 ] as const;
 const BLOCKED = new Set<string>(NEVER_EXPOSE);
 
+export interface SuperDebugDeps {
+  branches(): BranchRow[];
+  breakpoints(branch?: string): Breakpoint[];
+  fork(fromSeq: number, name: string, purpose: BranchRow["purpose"]): BranchRow;
+  replay(branch: string, to?: number): ReplayState[];
+  addBreakpoint(bp: Breakpoint): void;
+  appendBranchFact(branch: string, fact: FactV2): void;
+}
+
 export interface SuperDeps {
   now(): number;
   policyVersion(): string;
-  /** A bounded, read-only snapshot of the append-only log. */
+  /** Latest committed log sequence, needed so a new fact keeps the log gap-free. */
+  seq(): number;
+  /** A bounded, read-only snapshot of the most recent facts in the append-only log. */
   facts(): FactV2[];
   factsAfter(after: number): FactV2[];
   rows(table: "approvals" | "grants", match?: Record<string, string | number>): Row[];
@@ -41,6 +59,11 @@ export interface SuperDeps {
   suppressed(): number;
   isOwner(token: string): boolean;
   onChange(listener: () => void): () => void;
+  /** The single write path: hands one fact to commit() and wakes the fact-stream listeners. */
+  writeFact(fact: FactV2): void;
+  assessor: MainSessionAssessor;
+  timedOut(): Array<{ eval_id: string; outcome: AssessmentOutcome }>;
+  debug?: SuperDebugDeps;
 }
 
 function scrub(value: unknown): unknown {
@@ -55,13 +78,7 @@ function scrub(value: unknown): unknown {
 
 function ok(deps: SuperDeps, data: unknown, extra: Record<string, unknown> = {}): Response {
   return Response.json(
-    {
-      ok: true,
-      data: scrub(data),
-      now: deps.now(),
-      policy_version: deps.policyVersion(),
-      ...extra,
-    },
+    { ok: true, data: scrub(data), now: deps.now(), policy_version: deps.policyVersion(), ...extra },
     { headers: NO_STORE },
   );
 }
@@ -77,6 +94,24 @@ function windowMs(raw: string | null): number {
   const amount = Number(match[1]);
   const unit = match[2] === "h" ? 3_600_000 : match[2] === "d" ? 86_400_000 : 60_000;
   return Math.min(amount * unit, 30 * 86_400_000);
+}
+
+async function readBody(request: Request): Promise<Record<string, unknown>> {
+  if (!request.body) return {};
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > MAX_BODY) throw new Error("body too large");
+    chunks.push(value);
+  }
+  const text = Buffer.concat(chunks).toString("utf8") || "{}";
+  const parsed: unknown = JSON.parse(text);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("body must be an object");
+  return parsed as Record<string, unknown>;
 }
 
 function sseStream(deps: SuperDeps, after: number, project: string | null, signal: AbortSignal): ReadableStream {
@@ -124,26 +159,142 @@ function sseStream(deps: SuperDeps, after: number, project: string | null, signa
   });
 }
 
+function commandState(deps: SuperDeps): CommandState {
+  const derived = stateFromFacts(deps.facts(), deps.rows("approvals"), deps.rows("grants"), deps.policyVersion());
+  // The authoritative sequence comes from the view, not a bounded fact snapshot.
+  return { ...derived, seq: deps.seq() };
+}
+
+async function handleCommand(deps: SuperDeps, request: Request, path: string): Promise<Response> {
+  let body: Record<string, unknown>;
+  try {
+    body = await readBody(request);
+  } catch (error) {
+    return fail(deps, "invalid_body", error instanceof Error ? error.message : "invalid body", 400);
+  }
+  const parsed = parseCommand(path, body);
+  if (!parsed.ok) return fail(deps, parsed.code, parsed.message, parsed.status);
+
+  // Sweep on a request, never on a timer: a suspended evaluation costs zero processes.
+  deps.assessor.sweep();
+  let command = parsed.command;
+  if (command.kind === "eval.decide") {
+    const normalized = deps.assessor.decide(command.id, {
+      decision: command.decision,
+      reason: command.reason,
+      rule_assessments: (command.matched_rules ?? []).map((rule_id) => ({
+        rule_id,
+        matched: true,
+        reason: "matched",
+      })),
+      intent_evidence: command.matched_rules?.length ? "matched_rules" : undefined,
+    });
+    if (normalized) command = { ...command, decision: normalized.decision, reason: normalized.reason };
+  }
+
+  const prepared = prepareCommand(command, commandState(deps), deps.now());
+  if (!prepared.ok) return fail(deps, prepared.code, prepared.message, prepared.status);
+  try {
+    deps.writeFact(prepared.fact);
+  } catch (error) {
+    return fail(deps, "commit_conflict", error instanceof Error ? error.message : "commit failed", 409);
+  }
+  return ok(deps, prepared.data, { stream_after: prepared.fact.seq });
+}
+
+const DEBUG_COMMANDS = new Set([`${PREFIX}/fork`, `${PREFIX}/replay`, `${PREFIX}/breakpoints`]);
+const BRANCH_FACTS = /^\/v1\/super\/branches\/([A-Za-z0-9_:.-]{1,128})\/facts$/;
+
+function isDebugCommandPath(path: string): boolean {
+  return DEBUG_COMMANDS.has(path) || BRANCH_FACTS.test(path);
+}
+
+async function handleDebug(deps: SuperDeps, request: Request, path: string): Promise<Response> {
+  const debug = deps.debug;
+  if (!debug) return fail(deps, "debug_not_wired", "branch debugging is not available on this host", 501);
+  let body: Record<string, unknown>;
+  try {
+    body = await readBody(request);
+  } catch (error) {
+    return fail(deps, "invalid_body", error instanceof Error ? error.message : "invalid body", 400);
+  }
+  // Debug bodies are data too: they may not name a cwd, an agent or an access level.
+  for (const field of ["to", "cwd", "skill", "access", "emits", "agent", "answerers"]) {
+    if (Object.hasOwn(body, field)) {
+      return fail(deps, "instruction_field_rejected", `command body cannot specify ${field}`, 400);
+    }
+  }
+  if (path === `${PREFIX}/fork`) {
+    const fromSeq = Number(body.from_seq ?? 0);
+    const name = String(body.name ?? "");
+    const purpose = String(body.purpose ?? "what-if");
+    if (!Number.isInteger(fromSeq) || fromSeq < 0 || !/^[A-Za-z0-9_:.-]{1,128}$/.test(name)) {
+      return fail(deps, "invalid_fork", "from_seq and name are required", 400);
+    }
+    if (!["what-if", "debug", "audit"].includes(purpose)) {
+      return fail(deps, "invalid_fork", "purpose must be what-if, debug or audit", 400);
+    }
+    return ok(deps, debug.fork(fromSeq, name, purpose as BranchRow["purpose"]));
+  }
+  if (path === `${PREFIX}/replay`) {
+    // "to" is a reserved instruction field (recipients); a replay boundary is to_seq.
+    const branch = String(body.branch ?? "main");
+    const to = body.to_seq === undefined ? undefined : Number(body.to_seq);
+    return ok(deps, { branch, steps: debug.replay(branch, to) });
+  }
+  if (path === `${PREFIX}/breakpoints`) {
+    const id = String(body.id ?? "");
+    if (!id || id.length > 128) return fail(deps, "invalid_breakpoint", "id is required", 400);
+    const bp: Breakpoint = {
+      id,
+      branch: String(body.branch ?? "main"),
+      action: String(body.action ?? "pause") as Breakpoint["action"],
+      seq: body.seq === undefined ? undefined : Number(body.seq),
+      type: Array.isArray(body.type) ? (body.type as string[]).slice(0, 16) : undefined,
+      project_id: body.project_id === undefined ? undefined : String(body.project_id),
+      correlation_id: body.correlation_id === undefined ? undefined : String(body.correlation_id),
+    };
+    debug.addBreakpoint(bp);
+    return ok(deps, bp);
+  }
+  const branchFact = BRANCH_FACTS.exec(path);
+  if (branchFact) {
+    const fact = body.fact;
+    if (!fact || typeof fact !== "object") return fail(deps, "invalid_fact", "fact is required", 400);
+    const candidate = { ...(fact as Record<string, unknown>), meta: { branch: branchFact[1] } } as unknown as FactV2;
+    debug.appendBranchFact(branchFact[1], candidate);
+    return ok(deps, { branch: branchFact[1], seq: candidate.seq });
+  }
+  return fail(deps, "not_found", `unknown debug command ${path}`, 404);
+}
+
 async function route(deps: SuperDeps, request: Request, url: URL): Promise<Response> {
   const path = url.pathname;
 
-  // Same-origin only. A local file:// page sends Origin: null, which is allowed on loopback
-  // so the zero-build frontend can be opened by double-clicking it.
+  // Same-origin only. A local file:// page sends Origin: null, allowed on loopback so the
+  // zero-build frontend can be opened by double-clicking it.
   const origin = request.headers.get("origin");
   const loopback = LOOPBACK.has(url.hostname);
   if (origin && origin !== url.origin && !(origin === "null" && loopback)) {
     return fail(deps, "cross_origin", "this endpoint is same-origin only", 403);
   }
 
-  // M2 has no write path at all, so say so before auth: a command is refused as a command,
-  // not misleadingly reported as a missing key. M3 must move auth ahead of this check.
-  if (request.method !== "GET") {
-    return fail(deps, "writes_require_explicit_command", "M2 exposes read endpoints only; commands arrive in M3", 405);
+  // Auth comes FIRST in M3. Loopback convenience applies to reads only; every command needs
+  // an owner key on every host, including 127.0.0.1.
+  const isRead = request.method === "GET";
+  const token = request.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
+  const authorized = token ? deps.isOwner(token) : loopback && isRead;
+  if (!authorized) {
+    return isRead
+      ? fail(deps, "unauthorized", "owner key required off loopback", 401)
+      : fail(deps, "writes_require_owner_key", "every command needs an owner key", 401);
   }
 
-  const token = request.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
-  const authorized = token ? deps.isOwner(token) : loopback;
-  if (!authorized) return fail(deps, "unauthorized", "owner key required off loopback", 401);
+  if (!isRead) {
+    if (isCommandPath(path)) return handleCommand(deps, request, path);
+    if (isDebugCommandPath(path)) return handleDebug(deps, request, path);
+    return fail(deps, "writes_require_explicit_command", "only the declared command paths are writable", 405);
+  }
 
   const facts = deps.facts();
   const now = deps.now();
@@ -187,11 +338,14 @@ async function route(deps: SuperDeps, request: Request, url: URL): Promise<Respo
   }
 
   if (path === `${PREFIX}/policy`) {
+    const state = commandState(deps);
     return ok(deps, {
-      version: deps.policyVersion(),
+      version: state.policy_version,
+      base_revision: state.policy_version,
+      paused: state.paused,
       prefix: PREFIX,
-      read_only: true,
-      commands: "M3",
+      commands_enabled: true,
+      accept_mode: "observe",
     });
   }
 
@@ -203,8 +357,22 @@ async function route(deps: SuperDeps, request: Request, url: URL): Promise<Respo
     return ok(deps, { approvals: deps.rows("approvals", project === "default" ? {} : { project_id: project }) });
   }
 
+  if (path === `${PREFIX}/eval/pending`) {
+    return ok(deps, { cards: deps.assessor.pending(), timed_out: deps.timedOut() });
+  }
+
+  const evalStatus = /^\/v1\/super\/eval\/([A-Za-z0-9_:.-]{1,128})$/.exec(path);
+  if (evalStatus) {
+    const status = deps.assessor.status(evalStatus[1]);
+    return status ? ok(deps, status) : fail(deps, "not_found", "no live evaluation with that id", 404);
+  }
+
+  if (path === `${PREFIX}/branches`) {
+    return ok(deps, { branches: deps.debug?.branches() ?? [] });
+  }
+
   if (path === `${PREFIX}/breakpoints`) {
-    return ok(deps, { items: [], note: "branch breakpoints are wired in M3" });
+    return ok(deps, { items: deps.debug?.breakpoints(url.searchParams.get("branch") ?? undefined) ?? [] });
   }
 
   const grant = /^\/v1\/super\/grants\/([A-Za-z0-9_:.-]{1,128})$/.exec(path);
@@ -249,22 +417,67 @@ export function makeSuperHandler(deps: SuperDeps) {
 async function liveDeps(): Promise<SuperDeps> {
   const hub = await import("./runtime.ts");
   const { whose } = await import("../kernel/credentials.ts");
+  const store = await import("../kernel/store.ts");
+  const eventstore = await import("./super-eventstore.ts");
   const maxFacts = Number(process.env.AGENT_AUTOLOOP_SUPER_MAX_FACTS ?? DEFAULT_MAX_FACTS);
+
+  const board = new HealthBoard();
+  for (const name of ["super-api", "watchdog", "assessor"]) board.claim(name, name, Date.now());
+
+  const timedOut: Array<{ eval_id: string; outcome: AssessmentOutcome }> = [];
+  const assessor = new MainSessionAssessor(
+    () => DEFAULT_ASSESSOR_CONFIG,
+    Date.now,
+    (evalId, outcome) => {
+      timedOut.push({ eval_id: evalId, outcome });
+      board.report("assessor", "assessor", false, "timeout", Date.now());
+    },
+  );
+
+  const recent = () => hub.logAfter(Math.max(0, hub.getView().seq - maxFacts), maxFacts) as unknown as FactV2[];
+  const main: MainLog = (from, to) => (hub.logAfter(from, -1) as unknown as FactV2[]).filter((fact) => fact.seq <= to);
+
   return {
     now: Date.now,
     policyVersion: () => String(hub.getView().get("config", "rules")?.version ?? "unversioned"),
-    facts: () => hub.logAfter(0, maxFacts) as unknown as FactV2[],
+    seq: () => hub.getView().seq,
+    facts: recent,
     factsAfter: (after) => hub.logAfter(after, -1) as unknown as FactV2[],
     rows: (table, match) => hub.getView().select(table, match ?? {}),
-    health: () => [],
-    suppressed: () => 0,
+    health: () => board.all(),
+    suppressed: () => recent().filter((fact) => fact.type === "attention.suppressed").length,
     isOwner: (token) => Boolean(whose(hub.getView(), "owner", token)),
     onChange: (listener) => hub.onChange(() => listener()),
+    writeFact: (fact) => {
+      const view = hub.getView();
+      const stored = fact as unknown as Fact;
+      store.commit(hub.db, view, () => [stored]);
+      hub.publish(fact.type, [stored]);
+      board.report("super-api", "super-api", true, undefined, Date.now());
+    },
+    assessor,
+    timedOut: () => [...timedOut],
+    debug: {
+      branches: () => eventstore.listBranches(hub.db),
+      breakpoints: (branch) => eventstore.listBreakpoints(hub.db, branch),
+      fork: (fromSeq, name, purpose) => eventstore.fork(hub.db, fromSeq, name, purpose, Date.now()),
+      replay: (branch, to) => [...eventstore.replay(hub.db, branch, { to, evolve: (_view, batch) => batch, main })],
+      addBreakpoint: (bp) => eventstore.addBreakpoint(hub.db, bp),
+      appendBranchFact: (branch, fact) => eventstore.appendBranchFact(hub.db, branch, fact),
+    },
   };
 }
 
 let live: ReturnType<typeof makeSuperHandler> | undefined;
 export async function superHandle(request: Request): Promise<Response | undefined> {
+  // Short-circuit before any super initialization: upstream /v1 traffic must stay untouched.
+  let pathname: string;
+  try {
+    pathname = new URL(request.url).pathname;
+  } catch {
+    return undefined;
+  }
+  if (!pathname.startsWith(PREFIX)) return undefined;
   live ??= makeSuperHandler(await liveDeps());
   return live(request);
 }

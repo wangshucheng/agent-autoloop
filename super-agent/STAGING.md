@@ -9,9 +9,9 @@ M0/M1 阶段为了不覆盖上游 `agent-autoloop` 的任何原有文件，交�
 | 暂存位置 | 目标位置（M1+） |
 | --- | --- |
 | ~~`src/kernel/*.ts`~~（M1 已落地，副本已删除） | `kernel/fact.ts` / `approval.ts` / `excitation.ts` / `grants.ts` / `five-questions.ts`；M2 再扩展 `evolve.ts` / `decide.ts` |
-| `src/domain/ports.ts` | `domain/ports.ts` |
+| `src/domain/ports.ts` | 保留为 dsh 移植契约总览；运行时以 `host/super-*.ts` 为准 |
 | `src/host/{eventstore,blackboard,watchdog}.ts` | **M2 已落地**：`host/super-eventstore.ts` / `super-blackboard.ts` / `super-watchdog.ts`，副本已删除 |
-| `src/host/assessor.ts` | M3 落位（主会话 LLM 评估旁路，结论以 `eval.decided` 回写） |
+| ~~`src/host/assessor.ts`~~（M3 已落地，副本已删除） | `host/super-assessor.ts`（评估旁路）+ `host/super-commands.ts`（显式写命令） |
 | `src/web/api.ts` | `web/api.ts` |
 | `web/index.html` 等 | `web/`（可交互前端，可直接运行） |
 | `schemas/fact.schema.json` | `protocol/fact.schema.json` 或 `schemas/` |
@@ -25,9 +25,10 @@ M0/M1 阶段为了不覆盖上游 `agent-autoloop` 的任何原有文件，交�
 - **不做「审计追踪 DeepSeek」**：保留通用审计（因果链 / why / 回放 / fork / 断点）与主会话 LLM 评估；不记录模型调用明细、不生成模型审计摘要。见 `docs/02-事件内核-回放-fork-断点-审计.md §6.2`。
 - **M0 基线已记录**：Windows 本机不作为正式基线，正式基线复用底座 CI 的 Linux + macOS 双矩阵；本机 `npm ci` / `typecheck` / 63 项纯内核回归全绿。见 `docs/M0_BASELINE.md`。
 - **M1 纯内核已接线**：四个 L0 组件落到 `kernel/` 顶层，新增五问组合器 `kernel/five-questions.ts` 与 `tests/super-agent-kernel.test.ts`（31 项）；底座原有文件零改动，`purity.test.ts` 6/6 守护通过。接线中修掉了类型、去重契约、external taint 传播三个真实缺陷，详见 `docs/M0_BASELINE.md §5`。
-- **M2 只读控制平面已接线**：`approvals` / `grants` 投影、`host/super-{blackboard,eventstore,watchdog,api}.ts`、`/v1/super/*` 只读端点与 SSE、`tests/super-agent-host.test.ts`（16 项）。写命令端点统一 405，留给 M3。见 `docs/M2_READONLY_PLANE.md`。
 - **M0 正式基线已判定通过**：CI run `42021872381` 的 Linux + macOS 双矩阵全部 success。
-- **schema 层与 `src/domain/ports.ts`、`src/web/api.ts` 仍是契约文件**；下一站 M3（写命令 + Assessor）。
+- **M2 只读控制平面已接线**：`approvals` / `grants` 投影、`host/super-{blackboard,eventstore,watchdog,api}.ts`、`/v1/super/*` 只读端点与 SSE、`tests/super-agent-host.test.ts`（16 项）。CI run `42032246684` 双矩阵 success。见 `docs/M2_READONLY_PLANE.md`。
+- **M3 显式写命令与评估旁路已接线**：`host/super-commands.ts`（五类命令 → 一条事实）、`host/super-assessor.ts`（候选卡 → `eval.decided` 回写）、鉴权前置、分支调试、HealthBoard 实时、`tests/super-agent-m3.test.ts`（20 项）。合并绿色回归 135/135。见 `docs/M3_COMMANDS_AND_ASSESSMENT.md`。
+- **schema 层与 `src/domain/ports.ts`、`src/web/api.ts` 仍是契约文件**；下一站 M4（真实配置 / 组件接线 / 物化投影 / 生产平台）。
 
 ## 落地时必须留意的三条底座约束
 
