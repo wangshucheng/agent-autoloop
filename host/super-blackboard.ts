@@ -38,6 +38,29 @@ export interface BoardLane {
   items: BoardItem[];
 }
 
+/** The materialized projection row. evolve() is its only writer; committed facts carry it as a change. */
+export interface BoardRow {
+  id: string;
+  fact_seq: number;
+  project_id: string;
+  lane: LaneId;
+  kind: string;
+  title: string;
+  preview: string;
+  state: string;
+  waiting_for?: string;
+  correlation_id?: string;
+  causation_id?: number;
+  hops: number;
+  policy_version?: string;
+  grant_id?: string;
+  taint?: "none" | "external";
+  actor?: string;
+  attention_cost: number;
+  at: number;
+  actions: string[];
+}
+
 export interface Overview {
   needs_person: { count: number; items: BoardItem[] };
   health: {
@@ -96,37 +119,96 @@ const LANE_LABELS: Record<LaneId, string> = {
   tripped: "熔断/阻断",
 };
 
-/** Pure projection from facts. External text stays data and is labelled, never treated as an instruction. */
-export function lanesFromFacts(facts: FactV2[], projectId: string, now: number): BoardLane[] {
+const toLanes = (items: Array<{ lane: LaneId; item: BoardItem }>): BoardLane[] => {
   const lanes = new Map<LaneId, BoardItem[]>(LANE_ORDER.map((id) => [id, []]));
-  for (const fact of facts) {
-    if ((fact.meta?.project_id ?? "default") !== projectId) continue;
-    const lane = laneOf(fact);
-    if (!lane) continue;
-    lanes.get(lane)!.push({
-      id: `${fact.seq}`,
-      kind: fact.type,
-      project_id: projectId,
-      title: titleOf(fact),
-      preview: previewOf(fact),
-      state: stateOf(fact),
-      waiting_for: waitingFor(fact),
-      age_minutes: Math.max(0, Math.round((now - fact.at) / 60_000)),
-      hops: fact.meta?.hops ?? 0,
-      policy_version: fact.meta?.policy_version,
-      grant_id: fact.meta?.grant_id,
-      correlation_id: fact.meta?.correlation_id,
-      causation_id: fact.meta?.causation_id,
-      taint: fact.meta?.taint,
-      actions: actionsOf(fact),
-    });
-  }
+  for (const { lane, item } of items) lanes.get(lane)!.push(item);
   return LANE_ORDER.map((id) => ({
     id,
     label: LANE_LABELS[id],
     count: lanes.get(id)!.length,
     items: lanes.get(id)!,
   }));
+};
+
+/** Pure projection from facts. External text stays data and is labelled, never treated as an instruction. */
+export function lanesFromFacts(facts: FactV2[], projectId: string, now: number): BoardLane[] {
+  const items: Array<{ lane: LaneId; item: BoardItem }> = [];
+  for (const fact of facts) {
+    if ((fact.meta?.project_id ?? "default") !== projectId) continue;
+    const described = describeFact(fact);
+    if (!described.lane) continue;
+    items.push({
+      lane: described.lane,
+      item: {
+        id: `${fact.seq}`,
+        kind: fact.type,
+        project_id: projectId,
+        title: described.title,
+        preview: described.preview,
+        state: described.state,
+        waiting_for: described.waiting_for,
+        age_minutes: Math.max(0, Math.round((now - fact.at) / 60_000)),
+        hops: fact.meta?.hops ?? 0,
+        policy_version: fact.meta?.policy_version,
+        grant_id: fact.meta?.grant_id,
+        correlation_id: fact.meta?.correlation_id,
+        causation_id: fact.meta?.causation_id,
+        taint: fact.meta?.taint,
+        actions: described.actions,
+      },
+    });
+  }
+  return toLanes(items);
+}
+
+/** Single source of truth for how a fact is displayed, shared by the log and the projection paths. */
+export interface FactDescription {
+  lane: LaneId | undefined;
+  title: string;
+  preview: string;
+  state: string;
+  waiting_for?: string;
+  actions: string[];
+}
+
+export function describeFact(fact: FactV2): FactDescription {
+  return {
+    lane: laneOf(fact),
+    title: titleOf(fact),
+    preview: previewOf(fact),
+    state: stateOf(fact),
+    waiting_for: waitingFor(fact),
+    actions: actionsOf(fact),
+  };
+}
+
+/** The materialized read path: no log scan, just the projection rows evolve() already wrote. */
+export function lanesFromRows(rows: BoardRow[], projectId: string, now: number): BoardLane[] {
+  const items: Array<{ lane: LaneId; item: BoardItem }> = [];
+  for (const row of rows) {
+    if (row.project_id !== projectId) continue;
+    items.push({
+      lane: row.lane,
+      item: {
+        id: `${row.fact_seq}`,
+        kind: row.kind,
+        project_id: projectId,
+        title: row.title,
+        preview: row.preview,
+        state: row.state,
+        waiting_for: row.waiting_for,
+        age_minutes: Math.max(0, Math.round((now - row.at) / 60_000)),
+        hops: row.hops,
+        policy_version: row.policy_version,
+        grant_id: row.grant_id,
+        correlation_id: row.correlation_id,
+        causation_id: row.causation_id,
+        taint: row.taint,
+        actions: row.actions,
+      },
+    });
+  }
+  return toLanes(items);
 }
 
 function laneOf(fact: FactV2): LaneId | undefined {

@@ -108,12 +108,12 @@ L4 卡经 `overview.health.cards` 透传到前端健康面板（**默认折叠**
 | `prettier --check` 新增/改动文件 | ✅ |
 | `node --check` 前端 app.js / mock.js | ✅ |
 | `host/http.ts` 行数 | 41 ≤ 50 |
-| CI 双矩阵 | 推送后触发，结果回填 |
+| CI 双矩阵 | ✅ run `42044645583`：`ubuntu-latest` + `macos-latest` **全部 success** |
 
-## 8. M4 第二批剩余项（仍需真实环境）
+## 8. M4 第二批进度
 
 1. ✅ **组件主动上报 + 自愈动作接口**（本文档）。
-2. 物化投影替换「读最近 N 条事实再投影」——需要新增看板投影表并让命令事实携带 `changes`。
+2. ✅ **看板物化投影**：`overview` / `blackboard` 改读 `board_items` 投影表，见 `M4_MATERIALIZED_PROJECTION.md`；`trace` / `attention` / `projects` 仍是事实派生读模型。
 3. Webhook / 飞书卡片 / 定时 / 多项目生产接线——需要真实凭据、回调地址与飞书应用配置。
 4. WSL → macOS 迁移压测——本机 `wsl.exe` 被安全策略禁止，需解禁或在 macOS 执行 `deploy/com.superagent.runtime.plist`。
 

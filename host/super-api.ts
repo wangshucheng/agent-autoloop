@@ -8,12 +8,15 @@ import { commit } from "../kernel/store.ts";
 import {
   attentionFromFacts,
   lanesFromFacts,
+  lanesFromRows,
   overviewOf,
   projectsFromFacts,
   traceFromFacts,
+  type BoardRow,
 } from "./super-blackboard.ts";
 import type { HealthEntry } from "./super-watchdog.ts";
 import { HealthPlane } from "./super-health.ts";
+import { withBoardChange } from "./super-projection.ts";
 import { MainSessionAssessor, type AssessmentOutcome } from "./super-assessor.ts";
 import {
   DEFAULT_SUPER_CONFIG,
@@ -62,6 +65,8 @@ export interface SuperDeps {
   facts(): FactV2[];
   factsAfter(after: number): FactV2[];
   rows(table: "approvals" | "grants", match?: Record<string, string | number>): Row[];
+  /** Materialized board projection. When absent, the handler falls back to scanning facts. */
+  boardRows?(projectId: string): Row[];
   health(): HealthEntry[];
   suppressed(): number;
   isOwner(token: string): boolean;
@@ -166,6 +171,12 @@ function sseStream(deps: SuperDeps, after: number, project: string | null, signa
       signal.removeEventListener("abort", stop);
     },
   });
+}
+
+/** The primary read path. Projection rows when wired, facts otherwise (keeps every older test honest). */
+function lanesFor(deps: SuperDeps, facts: FactV2[], project: string, now: number) {
+  if (!deps.boardRows) return lanesFromFacts(facts, project, now);
+  return lanesFromRows(deps.boardRows(project) as unknown as BoardRow[], project, now);
 }
 
 function commandState(deps: SuperDeps): CommandState {
@@ -361,7 +372,7 @@ async function route(deps: SuperDeps, request: Request, url: URL): Promise<Respo
   const project = url.searchParams.get("project") ?? "default";
 
   if (path === `${PREFIX}/overview`) {
-    const lanes = lanesFromFacts(facts, project, now);
+    const lanes = lanesFor(deps, facts, project, now);
     const problems = deps
       .health()
       .filter((entry) => entry.state !== "ok")
@@ -386,7 +397,7 @@ async function route(deps: SuperDeps, request: Request, url: URL): Promise<Respo
   }
 
   if (path === `${PREFIX}/blackboard`) {
-    return ok(deps, { project_id: project, lanes: lanesFromFacts(facts, project, now), now });
+    return ok(deps, { project_id: project, lanes: lanesFor(deps, facts, project, now), now });
   }
 
   if (path === `${PREFIX}/projects`) return ok(deps, { projects: projectsFromFacts(facts) });
@@ -539,13 +550,14 @@ async function liveDeps(): Promise<SuperDeps> {
     facts: recent,
     factsAfter: (after) => hub.logAfter(after, -1) as unknown as FactV2[],
     rows: (table, match) => hub.getView().select(table, match ?? {}),
+    boardRows: (project) => hub.getView().select("board_items", project === "default" ? {} : { project_id: project }),
     health: () => healthPlane.entries(),
     suppressed: () => recent().filter((fact) => fact.type === "attention.suppressed").length,
     isOwner: (token) => Boolean(whose(hub.getView(), "owner", token)),
     onChange: (listener) => hub.onChange(() => listener()),
     writeFact: (fact) => {
       const view = hub.getView();
-      const stored = fact as unknown as Fact;
+      const stored = withBoardChange(fact) as unknown as Fact;
       store.commit(hub.db, view, () => [stored]);
       hub.publish(fact.type, [stored]);
       report("super-api", true);

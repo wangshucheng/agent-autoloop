@@ -80,10 +80,10 @@ M3 留下一个用户可感知的缺口：所有写命令要 owner key，但前�
 
 ## 6. M4 第二批进度
 
-1. ✅ **组件主动上报 + 自愈动作接口**：已做成**不依赖外部系统**的可测闭环（14 项单测，合并回归 159/159），见 `M4_HEALTH_CLOSED_LOOP.md`。生产落地只剩注入一个真实 `HealingActor` 实现，`HealthPlane` 与 API 无需改动。
+1. ✅ **组件主动上报 + 自愈动作接口**：已做成**不依赖外部系统**的可测闭环，见 `M4_HEALTH_CLOSED_LOOP.md`。
+2. ✅ **看板物化投影**：`overview` / `blackboard` 改读 `board_items` 投影表，纯命令层契约零改动，等价性与回放一致性均有单测，见 `M4_MATERIALIZED_PROJECTION.md`。
 
 以下仍是**必须依赖外部系统或目标平台**才能验证的工作，不做伪实现：
-2. **物化投影**：`/v1/super/*` 目前仍读最近 N 条事实再投影。要换成投影表，需要为看板项新增投影表并让命令事实携带对应 `changes`，属于 M5 规模的模型改动。
 3. **Webhook / 飞书卡片 / 定时 / 多项目生产接线**：需要真实凭据、回调地址与飞书应用配置。
 4. **WSL → macOS 迁移压测**：本机 `wsl.exe` 被安全策略禁止，需要用户在安全中心解禁或在 macOS 上执行 `deploy/com.superagent.runtime.plist`。
 
