@@ -33,6 +33,7 @@ M0/M1 阶段为了不覆盖上游 `agent-autoloop` 的任何原有文件，交�
 - **M4 第二批第 1 项已完成**：`host/super-health.ts` 的 `HealthPlane` + `HealingActor` 接口把「组件上报 → Watchdog 阶梯 → 动作执行 → 恢复」做成零外部依赖的可测闭环；`/v1/super/health/report` · `/check` · `/actions` 端点、14 项单测、前端 L4 卡。见 `docs/M4_HEALTH_CLOSED_LOOP.md`。
 - **M4 第二批第 2 项已完成**：`board_items` 投影表、`host/super-projection.ts`、`lanesFromRows()`，看板主路径不再扫日志；等价性与回放 oracle 一致性单测 9 项，合并回归 168/168。见 `docs/M4_MATERIALIZED_PROJECTION.md`。
 - **M4 第二批第 3 项已完成**：`host/super-bridge.ts` 用底座原生的 `plugins/<source>/source.ts` 事件形状、`createCard` 卡片池（由 `plugins/feishu|desktop/channel.ts` 拉取）、`kernel/cron.ts` 与 `rules.json` 通道配置，接好 Webhook / 飞书卡片 / 定时 / 多项目路由；13 项单测、合并回归 181/181。见 `docs/M4_UPSTREAM_BRIDGE.md`。
+- **正式交接契约已交付**：`docs/MAC_MIGRATION_HANDOFF.md`（交付物/验收/风险/回滚/签收），主工作区 `docs/06-Mac迁移交接文档.md` 为交付副本；`docs/HANDOFF_MACOS.md` 为操作手册。
 - **移交 macOS 准备已完成**：端口全仓统一 3350（对齐底座 `init` 默认值）、`hub.listen` 改为 `主机:端口`、plist 加上「与底座自装 LaunchAgent 冲突」警告并改成占位符模板、`dev-wsl.sh` 不再把需外部 CLI 的完整 `npm test` 当硬门槛、新增 `scripts/bootstrap-macos.sh` 与 `docs/HANDOFF_MACOS.md`、9 项静态一致性单测。
 - **schema 层与 `src/domain/ports.ts`、`src/web/api.ts` 仍是契约文件**；M4 第二批仅余 WSL→macOS 迁移压测，需要目标平台，本环境无法验证。
 

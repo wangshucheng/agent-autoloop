@@ -1,6 +1,8 @@
 # 移交到 macOS：交接说明与执行清单
 
-记录时间：2026-11-06。本文档是**在一台新的 Mac 上继续本项目**的唯一入口。此前的所有开发都在 Windows 本机完成，本机 `wsl.exe` 被安全策略禁止，因此 Linux/macOS 的行为一直由 GitHub Actions 的 `ubuntu-latest` + `macos-latest` 双矩阵 CI 验证。
+记录时间：2026-11-06。本文档是**在一台新的 Mac 上继续本项目**的操作手册（逐步命令与验证清单）。
+
+> **文档分工**：正式交接契约（交付物清单、验收标准、风险登记、回滚、签收）见 `MAC_MIGRATION_HANDOFF.md`；本文负责「怎么做」。此前的所有开发都在 Windows 本机完成，本机 `wsl.exe` 被安全策略禁止，因此 Linux/macOS 的行为一直由 GitHub Actions 的 `ubuntu-latest` + `macos-latest` 双矩阵 CI 验证。
 
 ## 1. 移交时的状态
 

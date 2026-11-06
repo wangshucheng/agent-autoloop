@@ -122,6 +122,29 @@ test("the handoff document exists and carries the verification checklist", () =>
   assert.match(text, /init --port 3350/);
 });
 
+test("the formal handover contract exists and complements the operations manual", () => {
+  const contract = read("super-agent/docs/MAC_MIGRATION_HANDOFF.md");
+  for (const section of [
+    "## 文档控制",
+    "## 1. 交接摘要",
+    "## 3. 交付物清单",
+    "## 4. 环境差异矩阵",
+    "## 7. 验收标准",
+    "## 8. 剩余工作",
+    "## 9. 风险登记与缓解",
+    "## 10. 回滚与应急",
+    "## 12. 回传与签收",
+    "## 附录 B",
+  ]) {
+    assert.ok(contract.includes(section), section);
+  }
+  assert.match(contract, /190\/190/, "acceptance criteria must cite the green subset size");
+  assert.match(contract, /3350/, "the contract must state the upstream default port");
+  assert.match(contract, /d5c4e9a/, "the handoff must pin the HEAD it was written against");
+  assert.match(contract, /HANDOFF_MACOS\.md/, "the manual and the contract must cross-reference");
+  assert.ok(read("super-agent/docs/HANDOFF_MACOS.md").includes("MAC_MIGRATION_HANDOFF.md"));
+});
+
 test("the upstream HTTP handler is still within its architecture line limit", () => {
   assert.ok(read("host/http.ts").split("\n").length <= 50);
   assert.ok(existsSync(join(STAGING, "deploy", "com.superagent.runtime.plist")));
