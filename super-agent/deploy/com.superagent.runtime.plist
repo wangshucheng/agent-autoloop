@@ -1,10 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  macOS production LaunchAgent. Replace /Users/me and the node path before installing.
-  install: cp deploy/com.superagent.runtime.plist ~/Library/LaunchAgents/
-           launchctl load ~/Library/LaunchAgents/com.superagent.runtime.plist
-  The upstream hub exits when its log pipe breaks; KeepAlive is the L1 self-healing base.
+  OPTIONAL reference LaunchAgent template. READ THIS BEFORE INSTALLING.
+
+  The upstream hub already installs its OWN LaunchAgent at
+  ~/Library/LaunchAgents/agent-autoloop.plist when you run
+      agent-autoloop init          (or: agent-autoloop service)
+  and keeps the up process alive with KeepAlive. Two agents running up at once
+  fight over home/up.pid and host/up.ts throws "already running". The supported
+  path on macOS is simply to use the upstream service. This file is only for the
+  case where you deliberately initialize with the no-service flag and want to
+  manage launchd yourself.
+
+  Render the placeholders first with:
+      super-agent/scripts/bootstrap-macos.sh render-plist
+  It replaces __NODE_BIN__ with the absolute node@24 path, __REPO_ROOT__ with the
+  checkout, and __HOME_DIR__ with your home. Homebrew node@24 is NOT on the
+  default PATH; use the absolute path reported by: brew prefix for node@24
+
+  Then copy the rendered file to ~/Library/LaunchAgents/ and run
+      launchctl bootstrap gui/ID ~/Library/LaunchAgents/com.superagent.runtime.plist
+  where ID is your numeric user id. Do NOT also load the upstream agent plist.
 -->
 <plist version="1.0">
 <dict>
@@ -12,24 +28,29 @@
   <string>com.superagent.runtime</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/opt/homebrew/bin/node</string>
-    <string>/Users/me/super-agent-auto-loop-runtime/bin/agent-autoloop.ts</string>
+    <string>__NODE_BIN__</string>
+    <string>--disable-warning=ExperimentalWarning</string>
+    <string>__REPO_ROOT__/bin/agent-autoloop.ts</string>
     <string>up</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/me/super-agent-auto-loop-runtime</string>
+  <string>__REPO_ROOT__</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>AGENT_AUTOLOOP_HOME</key>
-    <string>/Users/me/.agent-autoloop</string>
+    <string>__HOME_DIR__/.agent-autoloop</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
   <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
   <key>StandardOutPath</key>
-  <string>/Users/me/.agent-autoloop/logs/stdout.log</string>
+  <string>__HOME_DIR__/.agent-autoloop/logs/stdout.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/me/.agent-autoloop/logs/stderr.log</string>
+  <string>__HOME_DIR__/.agent-autoloop/logs/stderr.log</string>
 </dict>
 </plist>

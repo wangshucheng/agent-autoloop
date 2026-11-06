@@ -13,7 +13,9 @@ python -m http.server 8080
 # 浏览器打开 http://127.0.0.1:8080
 ```
 
-连接真实后端：把顶部「API 地址」改成中台地址（默认 `http://127.0.0.1:8787`），点「连接后端」。前端会探测 `GET /v1/super/overview`；成功则切到真实数据并用 SSE 订阅 `GET /v1/super/stream?after=`，失败则留在演示数据。中台默认只听 `127.0.0.1`，loopback 放行同源与 `file://`（`Origin: null`）的只读请求。
+> 移交到 macOS 目标机继续：见 `docs/HANDOFF_MACOS.md` 与 `scripts/bootstrap-macos.sh`。
+
+连接真实后端：把顶部「API 地址」改成中台地址（默认 `http://127.0.0.1:3350`），点「连接后端」。前端会探测 `GET /v1/super/overview`；成功则切到真实数据并用 SSE 订阅 `GET /v1/super/stream?after=`，失败则留在演示数据。中台默认只听 `127.0.0.1`，loopback 放行同源与 `file://`（`Origin: null`）的只读请求。
 
 > **M4 起前端可填写 owner key**：在 banner 的「Owner key」输入框填入密钥后点「重连」，后续所有请求（含写命令）自动带 `Authorization: Bearer <owner-key>`。密钥只存在浏览器内存、不写入 URL；只读浏览在 loopback 仍免 key。SSE 走 `/v1/super/stream`——`EventSource` 无法发送自定义 header，而该端点在 loopback 只读免 key。命令契约见 `docs/M3_COMMANDS_AND_ASSESSMENT.md §3`。
 >

@@ -67,7 +67,7 @@ M1 落地后删掉 `super-agent/src/kernel/` 副本；M2 再删掉 `super-agent/
 ### 连接真实后端
 
 ```bash
-# 1. 启动中台（默认监听 127.0.0.1:8787，端口以实际 CLI 参数为准）
+# 1. 启动中台（默认监听 127.0.0.1:3350，端口以实际 CLI 参数为准）
 AGENT_AUTOLOOP_HOME=~/.agent-autoloop node bin/agent-autoloop.ts up
 
 # 2. 打开前端（推荐同源/本机静态服务）

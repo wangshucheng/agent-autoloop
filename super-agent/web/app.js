@@ -18,7 +18,7 @@
 
   var state = {
     mode: "demo",
-    apiBase: "http://127.0.0.1:8787",
+    apiBase: "http://127.0.0.1:3350",
     ownerKey: "",
     projectId: "home-deco",
     approvalMode: "gate",

@@ -42,11 +42,19 @@ cd "$ROOT"
 npm ci
 npm run format:check
 npm run typecheck
-# M0/M1 pure-kernel checks, fast and platform-independent. See super-agent/docs/M0_BASELINE.md.
+# M0-M4 green regression subset: platform-independent, no external Agent CLI needed.
 node --disable-warning=ExperimentalWarning --test \
-  tests/purity.test.ts tests/ci-scope.test.ts tests/cron.test.ts tests/super-agent-kernel.test.ts
-# Full suite. Needs the external Agent CLIs; on CI they are provisioned by install-smoke.sh.
-npm test
+  tests/purity.test.ts tests/ci-scope.test.ts tests/cron.test.ts tests/super-agent-kernel.test.ts \
+  tests/super-agent-host.test.ts tests/super-agent-m3.test.ts tests/super-agent-m4.test.ts \
+  tests/super-agent-m4-health.test.ts tests/super-agent-m4-projection.test.ts \
+  tests/super-agent-m4-bridge.test.ts tests/super-agent-handoff.test.ts \
+  tests/kernel.test.ts tests/hops.test.ts tests/projection.test.ts tests/schema.test.ts
+# The full suite needs a logged-in Agent CLI; CI provisions it via install-smoke.sh.
+if [[ "${SUPER_FULL_TEST:-0}" == "1" ]]; then
+  npm test
+else
+  echo "    skipped full npm test (set SUPER_FULL_TEST=1 after an Agent CLI is logged in)"
+fi
 node --disable-warning=ExperimentalWarning sim/random.ts 24301 20000
 node --disable-warning=ExperimentalWarning sim/crash.ts 1000 12648430
 node --disable-warning=ExperimentalWarning sim/mutate.ts

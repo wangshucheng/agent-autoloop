@@ -1,3 +1,8 @@
+# WSL2 development reference unit ONLY.
+# The upstream hub installs its own systemd user unit (`agent-autoloop.service`) via
+# `agent-autoloop init`; running both would fight over home/up.pid. Prefer the upstream service.
+# If you use this one, run `init --no-service`, replace %h/.nvm/... with your Node 24 path,
+# and make sure the upstream unit is disabled: systemctl --user disable --now agent-autoloop
 [Unit]
 Description=super-agent-auto-loop-runtime (WSL dev)
 After=network.target

@@ -72,7 +72,7 @@ super.json bindings + rules.json channels
 | `prettier --check` 新增/改动文件 | ✅ |
 | `npm run test:sim` 20000 步 | ✅ 35.4s / 1644 completed |
 | `host/http.ts` 行数 | 41 ≤ 50 |
-| CI 双矩阵 | 推送后触发，结果回填 |
+| CI 双矩阵 | run `42184474914`；最终结论以 Actions 页面为准（macOS job 已通过） |
 
 ## 6. M4 第二批进度
 

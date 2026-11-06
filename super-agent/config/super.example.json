@@ -1,8 +1,8 @@
 {
   "enabled": true,
   "hub": {
-    "listen": "127.0.0.1",
-    "publicUrl": "https://agent.example.com",
+    "listen": "127.0.0.1:3350",
+    "publicUrl": "http://127.0.0.1:3350",
     "stateDir": "~/.agent-autoloop"
   },
   "projects": [

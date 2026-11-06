@@ -23,7 +23,7 @@ import { appendBranchFact, ensureSchema, fork, iterateBranch, listBranches } fro
 import { makeSuperHandler, type SuperDeps } from "../host/super-api.ts";
 
 const NOW = 1_700_000_000_000;
-const BASE = "http://127.0.0.1:8787";
+const BASE = "http://127.0.0.1:3350";
 
 function state(overrides: Partial<CommandState> = {}): CommandState {
   return {

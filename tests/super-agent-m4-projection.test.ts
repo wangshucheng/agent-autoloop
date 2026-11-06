@@ -13,7 +13,7 @@ import { MainSessionAssessor } from "../host/super-assessor.ts";
 import { makeSuperHandler, type SuperDeps } from "../host/super-api.ts";
 
 const NOW = 1_700_000_000_000;
-const BASE = "http://127.0.0.1:8787";
+const BASE = "http://127.0.0.1:3350";
 
 function fact(seq: number, type: string, meta: Record<string, unknown> = {}, changes: FactV2["changes"] = []): FactV2 {
   return {

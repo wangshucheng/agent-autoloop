@@ -33,7 +33,7 @@ import { DEFAULT_ASSESSOR_CONFIG, MainSessionAssessor } from "../host/super-asse
 
 const NOW = 1_700_000_000_000;
 const HOUR = 3_600_000;
-const BASE = "http://127.0.0.1:8787";
+const BASE = "http://127.0.0.1:3350";
 
 function fact(seq: number, type: string, meta: Record<string, unknown> = {}, changes: FactV2["changes"] = []): FactV2 {
   return { version: 2, seq, at: NOW - (10 - seq) * 60_000, type, changes, meta: { project_id: "p1", ...meta } };
