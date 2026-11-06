@@ -47,6 +47,7 @@ python -m http.server 8080
 | 暂停处理 | `POST /v1/super/processing/pause` |
 | 重放 / 分支 / 断点 | `POST /v1/super/replay` · `/fork` · `/breakpoints`，以及 `GET /v1/super/debug/stream` |
 | 组件健康上报 / 自愈 | `POST /v1/super/health/report` · `/health/check`（需 owner key），`GET /v1/super/health` · `/health/actions`。见 `docs/M4_HEALTH_CLOSED_LOOP.md` |
+| 底座能力接线 | `POST /v1/super/ingress/:source` · `/cards/deliver`（需 owner key），`GET /v1/super/schedule` · `/channels` · `/projects/routes`。用底座飞书/桌面通道插件与 cron，见 `docs/M4_UPSTREAM_BRIDGE.md` |
 
 ## 设计约束
 

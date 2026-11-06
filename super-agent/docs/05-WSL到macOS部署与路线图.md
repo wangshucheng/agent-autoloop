@@ -205,5 +205,6 @@ macOS 生产（`deploy/launchd.plist`）：
 6. ✅ M4 第一批已完成：示例配置拆成 `rules.json` + `super.json`（前者已通过底座 `parseRules()`）、运行时接真实配置、前端 owner key 与 SSE 修正、10 项单测。详见 `docs/M4_CONFIG_AND_FRONTEND.md`。
 7. ✅ M4 第二批第 1 项已完成：组件主动上报 + 自愈动作接口做成零外部依赖的可测闭环（`host/super-health.ts`，14 项单测，合并回归 159/159）。见 `docs/M4_HEALTH_CLOSED_LOOP.md`。
 8. ✅ M4 第二批第 2 项已完成：看板物化投影（`board_items` 投影表，`overview` / `blackboard` 不再扫日志），等价性与回放一致性单测 9 项，合并回归 168/168。见 `docs/M4_MATERIALIZED_PROJECTION.md`。
-9. M4 第二批余下 2 项：Webhook / 飞书卡片 / 定时 / 多项目生产接线、WSL → macOS 迁移压测；需要真实凭据与目标平台，本环境无法验证。
-10. 三个决策点已由 master 拍板：fork 已执行、可交互前端已交付、不做「审计追踪 DeepSeek」；按 `docs/00 §8` 的已定结论推进 M0–M4。
+9. ✅ M4 第二批第 3 项已完成：用底座原生通道插件 / 来源 adapter / `kernel/cron.ts` 接好 Webhook、飞书卡片、定时与多项目路由，无需真实凭据；13 项单测、合并回归 181/181。见 `docs/M4_UPSTREAM_BRIDGE.md`。
+10. M4 第二批仅余 1 项：WSL → macOS 迁移压测，需要目标平台，本环境无法验证。
+11. 三个决策点已由 master 拍板：fork 已执行、可交互前端已交付、不做「审计追踪 DeepSeek」；按 `docs/00 §8` 的已定结论推进 M0–M4。

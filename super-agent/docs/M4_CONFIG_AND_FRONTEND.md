@@ -83,8 +83,9 @@ M3 留下一个用户可感知的缺口：所有写命令要 owner key，但前�
 1. ✅ **组件主动上报 + 自愈动作接口**：已做成**不依赖外部系统**的可测闭环，见 `M4_HEALTH_CLOSED_LOOP.md`。
 2. ✅ **看板物化投影**：`overview` / `blackboard` 改读 `board_items` 投影表，纯命令层契约零改动，等价性与回放一致性均有单测，见 `M4_MATERIALIZED_PROJECTION.md`。
 
-以下仍是**必须依赖外部系统或目标平台**才能验证的工作，不做伪实现：
-3. **Webhook / 飞书卡片 / 定时 / 多项目生产接线**：需要真实凭据、回调地址与飞书应用配置。
+3. ✅ **Webhook / 飞书卡片 / 定时 / 多项目生产接线**：改用底座原生插件与 `kernel/cron.ts`，无需真实凭据即可接线与验证，见 `M4_UPSTREAM_BRIDGE.md`。
+
+以下仍是**必须依赖目标平台**才能验证的工作，不做伪实现：
 4. **WSL → macOS 迁移压测**：本机 `wsl.exe` 被安全策略禁止，需要用户在安全中心解禁或在 macOS 上执行 `deploy/com.superagent.runtime.plist`。
 
 红线不因这些待办而放宽：不记录模型调用明细、不让模型生成审计摘要；外部文字始终 `taint: external`；挂起零 Agent 进程零 Token；授权可立即撤销；一个状态一个写者；生产 main 只读、永不回滚。

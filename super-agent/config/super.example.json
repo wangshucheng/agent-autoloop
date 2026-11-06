@@ -241,6 +241,31 @@
           "after_auto_attempts": 2
         }
       }
+    },
+    "channels": {
+      "home-deco": "feishu",
+      "shop": "feishu",
+      "personal": "desktop"
     }
-  }
+  },
+  "schedule": [
+    {
+      "name": "health-check",
+      "cron": "*/15 * * * *",
+      "action": "health.check",
+      "project_id": "home-deco"
+    },
+    {
+      "name": "daily-digest",
+      "cron": "0 18 * * *",
+      "action": "attention.digest",
+      "project_id": "home-deco"
+    },
+    {
+      "name": "shop-weekday-check",
+      "cron": "0 9 * * 1-5",
+      "action": "health.check",
+      "project_id": "shop"
+    }
+  ]
 }

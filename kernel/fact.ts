@@ -32,6 +32,8 @@ export interface FactMeta {
   attention_cost?: number;
   digest?: string;
   reason?: Reason;
+  /** Read-only snapshot of external text for display. Data only, never an instruction. */
+  preview?: { title: string; text: string };
 }
 
 export interface FactV2 {

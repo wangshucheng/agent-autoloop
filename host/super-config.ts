@@ -37,6 +37,13 @@ export interface SuperAttentionConfig {
   suppress_transient_errors: number;
 }
 
+export interface ScheduleSpec {
+  name: string;
+  cron: string;
+  action: string;
+  project_id?: string;
+}
+
 export interface SuperConfig {
   enabled: boolean;
   prefix: string;
@@ -47,9 +54,11 @@ export interface SuperConfig {
   projects: SuperProject[];
   max_facts: number;
   health_components: string[];
+  schedule: ScheduleSpec[];
   bindings: {
     sources: Record<string, string>;
     rules: Record<string, Record<string, unknown>>;
+    channels: Record<string, string>;
   };
 }
 
@@ -74,7 +83,8 @@ export const DEFAULT_SUPER_CONFIG: SuperConfig = {
   projects: [],
   max_facts: 5000,
   health_components: ["super-api", "watchdog", "assessor"],
-  bindings: { sources: {}, rules: {} },
+  schedule: [],
+  bindings: { sources: {}, rules: {}, channels: {} },
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -192,6 +202,14 @@ export function parseSuperConfig(raw: unknown): SuperConfig {
     // 0 in the example means "no artificial buffer limit"; the read model still needs a bound.
     max_facts: int(stream.max_buffer_facts, DEFAULT_SUPER_CONFIG.max_facts, 1, 50_000),
     health_components: components?.length ? components : [...DEFAULT_SUPER_CONFIG.health_components],
+    schedule: Array.isArray(root.schedule)
+      ? root.schedule.filter(isObject).map((entry) => ({
+          name: text(entry.name, "unnamed", 64),
+          cron: text(entry.cron, "0 * * * *", 64),
+          action: text(entry.action, "health.check", 64),
+          project_id: typeof entry.project_id === "string" ? entry.project_id : undefined,
+        }))
+      : [],
     bindings: {
       sources: isObject(bindings.sources)
         ? Object.fromEntries(
@@ -205,6 +223,13 @@ export function parseSuperConfig(raw: unknown): SuperConfig {
             Object.entries(bindings.rules).filter(([, value]) => isObject(value)) as Array<
               [string, Record<string, unknown>]
             >,
+          )
+        : {},
+      channels: isObject(bindings.channels)
+        ? Object.fromEntries(
+            Object.entries(bindings.channels)
+              .filter(([, value]) => typeof value === "string")
+              .map(([key, value]) => [key, String(value)]),
           )
         : {},
     },

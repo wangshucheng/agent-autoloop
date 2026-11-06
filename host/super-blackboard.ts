@@ -242,8 +242,8 @@ function laneOf(fact: FactV2): LaneId | undefined {
 }
 
 const rowOf = (f: FactV2): Record<string, unknown> => (f.changes[0]?.row as Record<string, unknown> | null) ?? {};
-const titleOf = (f: FactV2) => String(rowOf(f).title ?? f.type);
-const previewOf = (f: FactV2) => String(rowOf(f).text ?? "").slice(0, 120);
+const titleOf = (f: FactV2) => String(f.meta?.preview?.title ?? rowOf(f).title ?? f.type);
+const previewOf = (f: FactV2) => String(f.meta?.preview?.text ?? rowOf(f).text ?? "").slice(0, 120);
 const stateOf = (f: FactV2) => String(rowOf(f).state ?? f.type);
 const waitingFor = (f: FactV2): string | undefined =>
   ["card.created", "approval.required"].includes(f.type) ? "owner" : undefined;

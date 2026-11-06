@@ -17,6 +17,16 @@ import {
 import type { HealthEntry } from "./super-watchdog.ts";
 import { HealthPlane } from "./super-health.ts";
 import { withBoardChange } from "./super-projection.ts";
+import {
+  channelForProject,
+  deliverCard,
+  nextScheduledRuns,
+  projectRoutes,
+  translateIngress,
+  type CardSink,
+  type SuperCard,
+  type UpstreamChannel,
+} from "./super-bridge.ts";
 import { MainSessionAssessor, type AssessmentOutcome } from "./super-assessor.ts";
 import {
   DEFAULT_SUPER_CONFIG,
@@ -67,6 +77,10 @@ export interface SuperDeps {
   rows(table: "approvals" | "grants", match?: Record<string, string | number>): Row[];
   /** Materialized board projection. When absent, the handler falls back to scanning facts. */
   boardRows?(projectId: string): Row[];
+  /** Upstream primitives, injected by the live host. Absent = read-only bridge, no delivery. */
+  upstreamChannels?(): Record<string, UpstreamChannel>;
+  cardSink?: CardSink;
+  timezone?(): string;
   health(): HealthEntry[];
   suppressed(): number;
   isOwner(token: string): boolean;
@@ -271,6 +285,83 @@ async function handleHealthCommand(deps: SuperDeps, request: Request, path: stri
   }
 }
 
+const BRIDGE_CARDS = `${PREFIX}/cards/deliver`;
+const INGRESS = /^\/v1\/super\/ingress\/([a-z][a-z0-9-]{0,63})$/;
+
+function isBridgeCommandPath(path: string): boolean {
+  return path === BRIDGE_CARDS || INGRESS.test(path);
+}
+
+/** Bridges already-verified upstream events and cards; no signing or HTTP delivery happens here. */
+async function handleBridgeCommand(deps: SuperDeps, request: Request, path: string): Promise<Response> {
+  const cfg = deps.config ?? DEFAULT_SUPER_CONFIG;
+  let body: Record<string, unknown>;
+  try {
+    body = await readBody(request);
+  } catch (error) {
+    return fail(deps, "invalid_body", error instanceof Error ? error.message : "invalid body", 400);
+  }
+  for (const field of INSTRUCTION_FIELDS) {
+    if (Object.hasOwn(body, field)) {
+      return fail(deps, "instruction_field_rejected", `bridge body cannot specify ${field}`, 400);
+    }
+  }
+
+  const ingress = INGRESS.exec(path);
+  if (ingress) {
+    const source = ingress[1];
+    const rawEvents: unknown[] = Array.isArray(body.events) ? body.events : [body];
+    if (!rawEvents.length) return fail(deps, "invalid_event", "no events", 400);
+    const baseSeq = deps.seq();
+    const facts: FactV2[] = [];
+    for (const [index, raw] of rawEvents.entries()) {
+      try {
+        facts.push(translateIngress(source, raw, cfg, baseSeq + 1 + index, deps.now()));
+      } catch (error) {
+        return fail(deps, "invalid_event", error instanceof Error ? error.message : "invalid event", 400);
+      }
+    }
+    for (const fact of facts) {
+      try {
+        deps.writeFact(fact);
+      } catch (error) {
+        return fail(deps, "commit_conflict", error instanceof Error ? error.message : "commit failed", 409);
+      }
+    }
+    return ok(deps, {
+      source,
+      project_id: facts[0]?.meta?.project_id ?? "default",
+      count: facts.length,
+      facts: facts.map((fact) => ({ seq: fact.seq, correlation_id: fact.meta?.correlation_id })),
+    });
+  }
+
+  const sink = deps.cardSink;
+  if (!sink) return fail(deps, "card_sink_not_wired", "the upstream card pool is not available", 501);
+  const { key, title, text, options, kind, project_id } = body;
+  if (typeof key !== "string" || !key || key.length > 128 || typeof title !== "string" || typeof text !== "string") {
+    return fail(deps, "invalid_card", "key, title and text are required", 400);
+  }
+  const project = typeof project_id === "string" ? project_id : (cfg.projects[0]?.id ?? "default");
+  const selected = channelForProject(cfg, deps.upstreamChannels?.() ?? {}, project);
+  const card: SuperCard = {
+    key,
+    title: title.slice(0, 200),
+    text: text.slice(0, 1000),
+    options: Array.isArray(options)
+      ? options.filter((option): option is string => typeof option === "string").slice(0, 8)
+      : [],
+    kind: kind === "notice" ? "notice" : "ask",
+    project_id: project,
+  };
+  try {
+    const result = deliverCard(sink, card, selected.channel);
+    return ok(deps, { ...result, project_id: project, answerers: selected.answerers });
+  } catch (error) {
+    return fail(deps, "card_delivery_failed", error instanceof Error ? error.message : "delivery failed", 409);
+  }
+}
+
 const DEBUG_COMMANDS = new Set([`${PREFIX}/fork`, `${PREFIX}/replay`, `${PREFIX}/breakpoints`]);
 const BRANCH_FACTS = /^\/v1\/super\/branches\/([A-Za-z0-9_:.-]{1,128})\/facts$/;
 
@@ -363,6 +454,7 @@ async function route(deps: SuperDeps, request: Request, url: URL): Promise<Respo
   if (!isRead) {
     if (isCommandPath(path)) return handleCommand(deps, request, path);
     if (HEALTH_COMMANDS.has(path)) return handleHealthCommand(deps, request, path);
+    if (isBridgeCommandPath(path)) return handleBridgeCommand(deps, request, path);
     if (isDebugCommandPath(path)) return handleDebug(deps, request, path);
     return fail(deps, "writes_require_explicit_command", "only the declared command paths are writable", 405);
   }
@@ -401,6 +493,20 @@ async function route(deps: SuperDeps, request: Request, url: URL): Promise<Respo
   }
 
   if (path === `${PREFIX}/projects`) return ok(deps, { projects: projectsFromFacts(facts) });
+
+  if (path === `${PREFIX}/projects/routes`) {
+    return ok(deps, { routes: projectRoutes(cfg, deps.upstreamChannels?.() ?? {}) });
+  }
+
+  if (path === `${PREFIX}/channels`) {
+    return ok(deps, { channels: deps.upstreamChannels?.() ?? {} });
+  }
+
+  if (path === `${PREFIX}/schedule`) {
+    return ok(deps, {
+      schedules: nextScheduledRuns(cfg.schedule, now, deps.timezone?.() ?? "Asia/Shanghai"),
+    });
+  }
 
   if (path === `${PREFIX}/health`) {
     const entries = deps.health();
@@ -551,6 +657,9 @@ async function liveDeps(): Promise<SuperDeps> {
     factsAfter: (after) => hub.logAfter(after, -1) as unknown as FactV2[],
     rows: (table, match) => hub.getView().select(table, match ?? {}),
     boardRows: (project) => hub.getView().select("board_items", project === "default" ? {} : { project_id: project }),
+    upstreamChannels: () => hub.rules.channels as unknown as Record<string, UpstreamChannel>,
+    cardSink: { createCard: (spec) => hub.createCard(spec) as { card: number; duplicate: boolean } },
+    timezone: () => hub.rules.timezone ?? "Asia/Shanghai",
     health: () => healthPlane.entries(),
     suppressed: () => recent().filter((fact) => fact.type === "attention.suppressed").length,
     isOwner: (token) => Boolean(whose(hub.getView(), "owner", token)),

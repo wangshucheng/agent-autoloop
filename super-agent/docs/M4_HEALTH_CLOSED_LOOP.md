@@ -114,7 +114,7 @@ L4 卡经 `overview.health.cards` 透传到前端健康面板（**默认折叠**
 
 1. ✅ **组件主动上报 + 自愈动作接口**（本文档）。
 2. ✅ **看板物化投影**：`overview` / `blackboard` 改读 `board_items` 投影表，见 `M4_MATERIALIZED_PROJECTION.md`；`trace` / `attention` / `projects` 仍是事实派生读模型。
-3. Webhook / 飞书卡片 / 定时 / 多项目生产接线——需要真实凭据、回调地址与飞书应用配置。
+3. ✅ **Webhook / 飞书卡片 / 定时 / 多项目生产接线**：用底座原生通道插件与 cron 完成，见 `M4_UPSTREAM_BRIDGE.md`。
 4. WSL → macOS 迁移压测——本机 `wsl.exe` 被安全策略禁止，需解禁或在 macOS 执行 `deploy/com.superagent.runtime.plist`。
 
 红线不变：不记录模型调用明细、不让模型生成审计摘要；外部文字始终 `taint: external`；挂起零 Agent 进程零 Token；授权可立即撤销；一个状态一个写者；生产 main 只读、永不回滚。

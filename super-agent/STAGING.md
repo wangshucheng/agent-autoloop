@@ -32,7 +32,8 @@ M0/M1 阶段为了不覆盖上游 `agent-autoloop` 的任何原有文件，交�
 - **M4 第一批已完成**：修掉「示例配置会让中台无法启动」的缺陷，拆出 `super.json`，`host/super-config.ts` 与 `liveDeps()` 接真实配置，前端补 owner key 输入并改用 super SSE；10 项单测（含 `node:vm` 前端冒烟）。见 `docs/M4_CONFIG_AND_FRONTEND.md`。
 - **M4 第二批第 1 项已完成**：`host/super-health.ts` 的 `HealthPlane` + `HealingActor` 接口把「组件上报 → Watchdog 阶梯 → 动作执行 → 恢复」做成零外部依赖的可测闭环；`/v1/super/health/report` · `/check` · `/actions` 端点、14 项单测、前端 L4 卡。见 `docs/M4_HEALTH_CLOSED_LOOP.md`。
 - **M4 第二批第 2 项已完成**：`board_items` 投影表、`host/super-projection.ts`、`lanesFromRows()`，看板主路径不再扫日志；等价性与回放 oracle 一致性单测 9 项，合并回归 168/168。见 `docs/M4_MATERIALIZED_PROJECTION.md`。
-- **schema 层与 `src/domain/ports.ts`、`src/web/api.ts` 仍是契约文件**；M4 第二批余下 2 项（Webhook 飞书 / WSL→macOS 压测）需要真实运行环境，本环境无法验证。
+- **M4 第二批第 3 项已完成**：`host/super-bridge.ts` 用底座原生的 `plugins/<source>/source.ts` 事件形状、`createCard` 卡片池（由 `plugins/feishu|desktop/channel.ts` 拉取）、`kernel/cron.ts` 与 `rules.json` 通道配置，接好 Webhook / 飞书卡片 / 定时 / 多项目路由；13 项单测、合并回归 181/181。见 `docs/M4_UPSTREAM_BRIDGE.md`。
+- **schema 层与 `src/domain/ports.ts`、`src/web/api.ts` 仍是契约文件**；M4 第二批仅余 WSL→macOS 迁移压测，需要目标平台，本环境无法验证。
 
 ## 落地时必须留意的三条底座约束
 

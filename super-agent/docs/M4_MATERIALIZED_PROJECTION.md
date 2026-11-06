@@ -68,13 +68,13 @@ view.select("board_items")  ->  lanesFromRows()  ->  overview / blackboard
 | `prettier --check` 新增/改动文件 | ✅ |
 | `npm run test:sim` 20000 步 | ✅ 1644 completed（本机负载下 133s，此前 30–36s；不变量结论不变） |
 | `host/http.ts` 行数 | 41 ≤ 50 |
-| CI 双矩阵 | 推送后触发，结果回填 |
+| CI 双矩阵 | ✅ run `42182499252`：`ubuntu-latest` + `macos-latest` **全部 success** |
 
-## 7. M4 第二批剩余项（仍需真实环境）
+## 7. M4 第二批进度
 
 1. ✅ 组件主动上报 + 自愈动作接口（`M4_HEALTH_CLOSED_LOOP.md`）。
 2. ✅ 看板物化投影（本文档）。
-3. Webhook / 飞书卡片 / 定时 / 多项目生产接线——需要真实凭据、回调地址与飞书应用配置。
+3. ✅ **Webhook / 飞书卡片 / 定时 / 多项目生产接线**：改用底座原生插件与 cron，不需要真实凭据，见 `M4_UPSTREAM_BRIDGE.md`。
 4. WSL → macOS 迁移压测——本机 `wsl.exe` 被安全策略禁止，需解禁或在 macOS 执行 `deploy/com.superagent.runtime.plist`。
 
 红线不变：不记录模型调用明细、不让模型生成审计摘要；外部文字始终 `taint: external`；挂起零 Agent 进程零 Token；授权可立即撤销；一个状态一个写者；生产 main 只读、永不回滚。
